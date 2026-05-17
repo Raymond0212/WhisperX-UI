@@ -14,15 +14,21 @@ deleted
 
 On success, the app should persist speakers, transcript sentences, job settings, and completion time. On failure, it should persist `failed`, an error message, and enough metadata for the user to understand which audio and settings were involved.
 
+The current backend persists failed job status and `error_message` when processor execution raises, including the default local-provider path where WhisperX is unavailable.
+
 ## Processing Expectations
 
 Real-time progress is not required for MVP. The UI may show a simple processing state while the backend runs transcription and diarization.
 
 Processing should avoid partial success states that look completed. If transcript or speaker persistence fails, the job should be treated as failed unless the implementation has an explicit recovery path.
 
+The explicit `placeholder` provider is deterministic demo output. The local provider attempts WhisperX import and execution; fake-module tests cover segment chunking into sentence rows, but real WhisperX runtime/model execution remains unverified here.
+
 ## Data Retention
 
 Uploaded audio is retained by default. Deletion should use soft delete for MVP by setting `deleted_at` and hiding the item from normal library views.
+
+Current soft delete also marks related transcription jobs as `deleted`. Audio bytes are retained on disk.
 
 Permanent deletion is deferred and should later be explicit because it removes user data from disk and SQLite.
 
@@ -33,3 +39,5 @@ Transcript playback depends on valid sentence timestamps. Editing transcript tex
 ## Filesystem Assumptions
 
 The backend should expect local filesystem operations to fail because of permissions, missing directories, disk space, or moved files. Such failures should be captured as API errors or job failures rather than causing silent data loss.
+
+The audio stream endpoint validates that the stored path resolves inside the configured uploads directory and reports missing files as API errors.

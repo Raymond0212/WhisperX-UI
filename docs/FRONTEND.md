@@ -12,6 +12,8 @@ The frontend is a React browser UI designed for local use and future Electron pa
 - Transcript Review: audio player, speaker samples, speaker renaming, sentence view, speaker-turn view, transcript editing, sentence playback, and VTT export.
 - Settings: default transcription model, diarization model, local model paths, optional online provider API keys, and storage location if supported.
 
+Current implementation covers the core upload/library/workspace/settings flow with drag-and-drop upload, title editing, model config controls, audio playback through the backend stream endpoint, sentence and speaker-turn review, speaker renaming, sentence edit-on-blur, and VTT export. It does not yet include all metadata display details such as duration or storage-location controls.
+
 ## Interaction Rules
 
 - Sentence-level transcript records are canonical and should stay individually clickable and editable in every transcript display mode.
@@ -36,3 +38,7 @@ The frontend is a React browser UI designed for local use and future Electron pa
 - Keep API base URL configurable.
 - Do not depend on browser access to arbitrary local file paths.
 - Prefer backend streaming endpoints for audio playback.
+
+## Frontend Tests
+
+`frontend/package.json` defines `npm test`, which runs Node.js utility tests for time formatting, speaker-turn grouping, and job settings normalization. These tests require Node.js/npm; they were not run during the current documentation update because those commands were unavailable in this environment.

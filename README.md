@@ -1,6 +1,8 @@
 # WhisperX UI
 
-Local-first MVP scaffold for uploading audio, running placeholder transcription/diarization, editing sentence-level transcripts, renaming speakers, and exporting VTT.
+Local-first MVP scaffold for uploading audio, running local or placeholder transcription, editing sentence-level transcripts, renaming speakers, and exporting VTT.
+
+The current backend supports upload, library listing, metadata fetch, title editing, soft deletion, browser audio streaming, job creation, transcript sentence edits, speaker renaming, settings, and VTT export. Local processing attempts to import and run WhisperX; if WhisperX is unavailable, the job fails with a clear message. Set the transcription provider to `placeholder` for deterministic demo transcript output.
 
 ## Backend
 
@@ -31,3 +33,9 @@ Set `VITE_API_BASE_URL` when the backend is not running on `http://127.0.0.1:800
 uv run pytest
 ```
 
+Frontend utility tests are available when Node.js and npm are installed:
+
+```bash
+cd frontend
+npm test
+```

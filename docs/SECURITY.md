@@ -19,6 +19,8 @@ WhisperX UI is a single-user local application. The default threat model is loca
 - If persistence is implemented, keys must be encrypted in SQLite.
 - Electron packaging should later prefer OS keychain storage.
 
+Current implementation strips `online_api_keys` and key names containing `api_key`, `token`, or `secret` before persisting app settings or job settings. The settings API returns `online_api_keys` as an empty object.
+
 ## File Handling
 
 - Uploaded files should be stored under the configured application data directory.
@@ -26,6 +28,8 @@ WhisperX UI is a single-user local application. The default threat model is loca
 - Duplicate filenames must not overwrite existing uploads.
 - Audio streaming endpoints should stream known uploaded files by database ID rather than arbitrary paths.
 - Soft deletion should hide files from normal UI without immediately destroying data.
+
+Current upload handling sanitizes source filenames, prefixes stored filenames with UUIDs, validates supported audio extensions, and normalizes audio MIME types. Streaming resolves the stored path and requires it to remain under the configured uploads directory.
 
 ## Logging
 

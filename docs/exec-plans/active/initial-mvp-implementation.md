@@ -63,6 +63,17 @@ Build the first working local WhisperX UI from the documented MVP requirements: 
 - User can export a VTT file.
 - App works locally without online API keys.
 
+## Current Implementation Status
+
+- Backend API implements upload/list/get/title edit/soft delete/stream, job create/get/list, transcript edit, speaker rename, settings, and VTT export.
+- Uploads normalize MIME type from supported audio extensions when needed and stream only stored paths contained under the configured uploads directory.
+- Job settings and failure messages are persisted. Secret-like keys and `online_api_keys` are stripped from persisted settings.
+- The default `local` provider attempts WhisperX and records a clear failed job if WhisperX cannot be imported. The explicit `placeholder` provider creates deterministic demo transcript, speaker, and VTT data.
+- The tested WhisperX path uses a fake WhisperX module to verify segment-to-sentence chunking and persistence. Real WhisperX runtime and model execution remain unverified in this repository state.
+- Transcript sentence edits update `current_text` while preserving `original_text`, timestamps, and speaker assignment. Speaker rename updates `display_name` while preserving `speaker_key`.
+- Frontend includes drag/drop upload, title editing, model config controls, audio playback, speaker and sentence review, speaker-turn grouping, settings, and VTT export links.
+- Python tests currently pass: `uv run pytest` collected 19 tests and all passed. Frontend test script exists, but Node.js/npm were not available in this environment, so frontend tests were not run here.
+
 ## Deferred Work
 
 - Real-time progress

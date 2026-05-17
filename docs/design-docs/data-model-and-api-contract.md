@@ -114,7 +114,7 @@ Optional storage for online provider credentials.
 | `created_at` | Creation timestamp. |
 | `updated_at` | Last update timestamp. |
 
-MVP default is no API key persistence unless encrypted storage is deliberately implemented.
+MVP default is no API key persistence unless encrypted storage is deliberately implemented. The current implementation creates the credential table but does not expose credential APIs; settings persistence strips secret-like keys and returns `online_api_keys` as an empty object.
 
 ## API Contract
 
@@ -138,6 +138,13 @@ Responsibilities:
 - soft delete audio
 - stream local audio for browser playback
 
+Current implementation notes:
+
+- Supported extensions are `.mp3`, `.wav`, `.m4a`, `.flac`, `.ogg`, and `.aac`.
+- Stored filenames use a UUID prefix plus a sanitized source filename.
+- MIME type is normalized from the filename when the supplied content type is not audio.
+- Streaming resolves the stored path and requires it to remain inside the configured uploads directory.
+
 ### Job APIs
 
 ```http
@@ -152,6 +159,12 @@ Responsibilities:
 - return job status and metadata
 - list jobs for an audio file
 - persist failure messages when processing fails
+
+Current implementation notes:
+
+- `transcription_provider: "placeholder"` produces deterministic demo transcript rows.
+- Other providers currently use the local WhisperX path, which imports WhisperX at runtime and fails the job clearly if unavailable.
+- The tested WhisperX path chunks returned segments into sentence records; real WhisperX runtime and model execution still need validation outside the fake module tests.
 
 ### Transcript APIs
 
@@ -190,6 +203,7 @@ Responsibilities:
 
 - read user preferences and default model settings
 - update settings as JSON-backed values
+- avoid persisting plaintext API keys or token-like values
 
 ## Derived Views
 

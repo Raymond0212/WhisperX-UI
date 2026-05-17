@@ -1,0 +1,106 @@
+from __future__ import annotations
+
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+JobStatus = Literal["uploaded", "processing", "completed", "failed", "deleted"]
+
+
+class AudioFileOut(BaseModel):
+    id: str
+    original_filename: str
+    stored_filename: str
+    display_title: str
+    mime_type: str | None = None
+    duration_seconds: float | None = None
+    size_bytes: int
+    created_at: str
+    deleted_at: str | None = None
+    latest_job_status: str | None = None
+
+
+class AudioUpdate(BaseModel):
+    display_title: str = Field(min_length=1, max_length=200)
+
+
+class JobCreate(BaseModel):
+    audio_file_id: str
+    transcription_provider: str = "local"
+    transcription_model: str = "whisperx-small"
+    diarization_provider: str = "local"
+    diarization_model: str = "pyannote-local"
+    language: str | None = None
+    device: str = "auto"
+    compute_type: str = "int8"
+    batch_size: int = Field(default=8, ge=1, le=128)
+    speaker_count: int | None = Field(default=None, ge=1, le=20)
+    min_speakers: int | None = Field(default=None, ge=1, le=20)
+    max_speakers: int | None = Field(default=None, ge=1, le=20)
+    settings: dict[str, Any] = Field(default_factory=dict)
+
+
+class JobOut(BaseModel):
+    id: str
+    audio_file_id: str
+    status: JobStatus
+    transcription_provider: str
+    transcription_model: str
+    diarization_provider: str
+    diarization_model: str
+    language: str | None = None
+    device: str | None = None
+    compute_type: str | None = None
+    batch_size: int | None = None
+    speaker_count: int | None = None
+    min_speakers: int | None = None
+    max_speakers: int | None = None
+    settings: dict[str, Any]
+    error_message: str | None = None
+    created_at: str
+    started_at: str | None = None
+    completed_at: str | None = None
+
+
+class SpeakerOut(BaseModel):
+    id: str
+    job_id: str
+    speaker_key: str
+    display_name: str
+    sample_start: float
+    sample_end: float
+    created_at: str
+    updated_at: str
+
+
+class SpeakerUpdate(BaseModel):
+    display_name: str = Field(min_length=1, max_length=120)
+
+
+class TranscriptSentenceOut(BaseModel):
+    id: str
+    job_id: str
+    speaker_id: str
+    speaker_key: str
+    speaker_display_name: str
+    sentence_index: int
+    start_time: float
+    end_time: float
+    original_text: str
+    current_text: str
+    confidence: float | None = None
+    words: list[dict[str, Any]] | None = None
+    created_at: str
+    updated_at: str
+
+
+class TranscriptSentenceUpdate(BaseModel):
+    current_text: str = Field(max_length=10000)
+
+
+class SettingsUpdate(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    settings: dict[str, Any] = Field(default_factory=dict)
+
