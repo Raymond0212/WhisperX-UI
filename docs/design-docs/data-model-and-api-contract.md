@@ -41,7 +41,7 @@ Represents one processing run for an audio file.
 | `speaker_count` | Exact speaker count when provided. |
 | `min_speakers` | Minimum speakers when provided. |
 | `max_speakers` | Maximum speakers when provided. |
-| `settings_json` | Full serialized job settings. |
+| `settings_json` | Serialized job settings after secret-like keys are stripped. |
 | `error_message` | Failure reason. |
 | `created_at` | Creation timestamp. |
 | `started_at` | Processing start timestamp. |
@@ -164,7 +164,30 @@ Current implementation notes:
 
 - `transcription_provider: "placeholder"` produces deterministic demo transcript rows.
 - Other providers currently use the local WhisperX path, which imports WhisperX at runtime and fails the job clearly if unavailable.
-- The tested WhisperX path chunks returned segments into sentence records; real WhisperX runtime and model execution still need validation outside the fake module tests.
+- Request `settings` may carry transient runtime-only values such as `diarization_token` or `hf_token`; secret-like values are used for the current job when needed but stripped from persisted `settings_json`.
+- When diarization is enabled, the WhisperX path fails the job if the final segments do not contain speaker labels.
+- `diarization_provider: "none"` disables diarization pipeline setup and allows speakerless WhisperX output to persist under the fallback `SPEAKER_00`, even if a transient token is present.
+- The tested WhisperX path chunks returned segments into sentence records and covers fake alignment and diarization assignment. Real WhisperX, pyannote, model loading, and hardware execution still need validation outside the fake module tests.
+
+### Local Model APIs
+
+```http
+GET /api/models
+POST /api/models/prepare-basic
+```
+
+Responsibilities:
+
+- report local Hugging Face model download status under the configured `app_data/models/` directory
+- download the basic local transcription model when missing
+- keep Hugging Face tokens transient and out of persisted settings
+
+Current implementation notes:
+
+- The basic profile downloads `Systran/faster-whisper-small` into `app_data/models/Systran--faster-whisper-small`.
+- Download uses `huggingface_hub.snapshot_download` with a repository-local Hugging Face cache under `app_data/models/.hf-cache`.
+- When the local model directory exists, the WhisperX processor passes the local directory path to `whisperx.load_model`; otherwise it falls back to the configured model key.
+- The zero basic configuration path defaults diarization to `"none"` so users can run first local transcription without a gated diarization model or token.
 
 ### Transcript APIs
 

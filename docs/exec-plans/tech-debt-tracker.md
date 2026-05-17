@@ -14,7 +14,5 @@ This file tracks known deferred work and maintenance liabilities. Items should s
 | Waveform display | Deferred | Timestamped audio playback is sufficient for MVP. |
 | Batch uploads | Deferred | Single-file upload first. |
 | Extra export formats | Deferred | VTT export first; TXT, JSON, SRT, CSV, DOCX later. |
-| Model download manager | Deferred | Configure local model settings first. |
 | OS keychain integration | Deferred | Relevant when Electron packaging begins. |
-| Real WhisperX runtime verification | Open | Tests cover the provider boundary with a fake WhisperX module; real model loading, alignment, diarization, and hardware behavior still need environment validation. |
-| Frontend test execution in this environment | Open | `frontend/package.json` defines `npm test`, but Node.js/npm were not available during the current documentation update. |
+| Real WhisperX runtime verification | Open | Tests cover the provider boundary with a fake WhisperX module and local model path resolution; real model loading, alignment, diarization, and hardware behavior still need environment validation. |

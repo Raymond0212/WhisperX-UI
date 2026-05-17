@@ -14,7 +14,7 @@ from fastapi import HTTPException, UploadFile
 
 from .config import SUPPORTED_AUDIO_EXTENSIONS, AppConfig
 from .database import transaction
-from .schemas import JobCreate
+from .schemas import JobCreate, ModelPrepareRequest
 
 
 def utc_now() -> str:
@@ -57,6 +57,17 @@ def infer_audio_content_type(filename: str, supplied_content_type: str | None = 
 SECRET_KEY_PARTS = ("api_key", "token", "secret")
 
 
+LOCAL_MODEL_DEFINITIONS: dict[str, dict[str, Any]] = {
+    "whisperx-small": {
+        "display_name": "WhisperX small",
+        "repo_id": "Systran/faster-whisper-small",
+        "local_dir_name": "Systran--faster-whisper-small",
+        "required_for_basic": True,
+        "notes": "Basic local transcription model for zero-config one-click processing.",
+    }
+}
+
+
 def sanitize_persisted_settings(value: Any) -> Any:
     if isinstance(value, dict):
         sanitized: dict[str, Any] = {}
@@ -69,6 +80,99 @@ def sanitize_persisted_settings(value: Any) -> Any:
     if isinstance(value, list):
         return [sanitize_persisted_settings(item) for item in value]
     return value
+
+
+def local_model_path(config: AppConfig, model_key: str) -> Path | None:
+    definition = LOCAL_MODEL_DEFINITIONS.get(model_key)
+    if definition is None:
+        return None
+    return config.models_dir / str(definition["local_dir_name"])
+
+
+def is_downloaded_model_dir(path: Path) -> bool:
+    return path.exists() and any(item.name != ".cache" for item in path.iterdir())
+
+
+def download_hf_snapshot(
+    *, repo_id: str, local_dir: Path, cache_dir: Path, token: str | None
+) -> str:
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError as exc:
+        raise RuntimeError(
+            "huggingface_hub is not installed. Install project dependencies before downloading "
+            "local models."
+        ) from exc
+
+    return snapshot_download(
+        repo_id=repo_id,
+        local_dir=str(local_dir),
+        cache_dir=str(cache_dir),
+        token=token or None,
+    )
+
+
+def resolve_transcription_model_reference(config: AppConfig, model_key: str) -> str:
+    path = local_model_path(config, model_key)
+    if path is not None and is_downloaded_model_dir(path):
+        return str(path)
+    return model_key
+
+
+class ModelService:
+    def __init__(self, config: AppConfig) -> None:
+        self.config = config
+
+    def list_models(self) -> list[dict[str, Any]]:
+        return [
+            self._status_for_model(model_key)
+            for model_key in sorted(LOCAL_MODEL_DEFINITIONS)
+        ]
+
+    def prepare_basic(self, request: ModelPrepareRequest) -> dict[str, Any]:
+        if request.profile != "basic":
+            raise HTTPException(status_code=400, detail="Only the basic model profile is supported")
+
+        model_key = request.transcription_model or "whisperx-small"
+        if model_key not in LOCAL_MODEL_DEFINITIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported basic transcription model: {model_key}",
+            )
+
+        status = self._status_for_model(model_key)
+        if not status["downloaded"]:
+            definition = LOCAL_MODEL_DEFINITIONS[model_key]
+            local_dir = local_model_path(self.config, model_key)
+            assert local_dir is not None
+            local_dir.mkdir(parents=True, exist_ok=True)
+            download_hf_snapshot(
+                repo_id=str(definition["repo_id"]),
+                local_dir=local_dir,
+                cache_dir=self.config.models_dir / ".hf-cache",
+                token=request.hf_token,
+            )
+            status = self._status_for_model(model_key)
+
+        return {
+            "profile": "basic",
+            "ready": status["downloaded"],
+            "models": [status],
+        }
+
+    def _status_for_model(self, model_key: str) -> dict[str, Any]:
+        definition = LOCAL_MODEL_DEFINITIONS[model_key]
+        path = local_model_path(self.config, model_key)
+        assert path is not None
+        return {
+            "key": model_key,
+            "display_name": definition["display_name"],
+            "repo_id": definition["repo_id"],
+            "local_path": str(path),
+            "downloaded": is_downloaded_model_dir(path),
+            "required_for_basic": definition["required_for_basic"],
+            "notes": definition.get("notes"),
+        }
 
 
 class AudioService:
@@ -198,8 +302,9 @@ class AudioService:
 
 
 class JobService:
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: sqlite3.Connection, config: AppConfig) -> None:
         self.connection = connection
+        self.config = config
 
     def create_and_run(self, request: JobCreate) -> dict[str, Any]:
         audio_row = self.connection.execute(
@@ -244,7 +349,7 @@ class JobService:
             )
 
         try:
-            create_processor(self.connection, dict(audio_row), request).run(job_id)
+            create_processor(self.connection, self.config, dict(audio_row), request).run(job_id)
         except Exception as exc:
             with transaction(self.connection):
                 self.connection.execute(
@@ -349,6 +454,13 @@ def _speaker_from_words(words: list[dict[str, Any]]) -> str | None:
         if speaker:
             return str(speaker)
     return None
+
+
+def _segments_have_speaker_labels(segments: list[dict[str, Any]]) -> bool:
+    return any(
+        segment.get("speaker") or _speaker_from_words(segment.get("words") or [])
+        for segment in segments
+    )
 
 
 def _words_for_sentence(
@@ -486,17 +598,23 @@ class WhisperXProcessor:
         audio: dict[str, Any],
         request: JobCreate,
         whisperx_module: Any,
+        config: AppConfig,
     ) -> None:
         self.writer = DatabaseTranscriptWriter(connection)
         self.audio = audio
         self.request = request
         self.whisperx = whisperx_module
+        self.config = config
 
     def run(self, job_id: str) -> None:
         audio_path = self.audio["file_path"]
         device = "cpu" if self.request.device == "auto" else self.request.device
-        model = self.whisperx.load_model(
+        transcription_model = resolve_transcription_model_reference(
+            self.config,
             self.request.transcription_model,
+        )
+        model = self.whisperx.load_model(
+            transcription_model,
             device=device,
             compute_type=self.request.compute_type,
             language=self.request.language,
@@ -522,10 +640,15 @@ class WhisperXProcessor:
             )
 
         speaker_segments = None
+        diarization_enabled = self.request.diarization_provider != "none"
         diarization_token = self.request.settings.get(
             "diarization_token"
         ) or self.request.settings.get("hf_token")
-        if diarization_token and hasattr(self.whisperx, "DiarizationPipeline"):
+        if (
+            diarization_enabled
+            and diarization_token
+            and hasattr(self.whisperx, "DiarizationPipeline")
+        ):
             diarize = self.whisperx.DiarizationPipeline(
                 use_auth_token=diarization_token,
                 device=device,
@@ -544,9 +667,17 @@ class WhisperXProcessor:
         if speaker_segments is not None and hasattr(self.whisperx, "assign_word_speakers"):
             result = self.whisperx.assign_word_speakers(speaker_segments, result)
 
+        segments = result.get("segments", [])
+        if diarization_enabled and not _segments_have_speaker_labels(segments):
+            raise RuntimeError(
+                "Diarization did not produce speaker labels. Configure a working local diarization "
+                "pipeline/token, provide speaker-labeled WhisperX output, or set "
+                'diarization_provider "none".'
+            )
+
         sentences = [
             sentence
-            for segment in result.get("segments", [])
+            for segment in segments
             for sentence in segment_to_sentences(segment)
         ]
         self.writer.persist(job_id, sentences)
@@ -564,11 +695,11 @@ def import_whisperx() -> Any:
 
 
 def create_processor(
-    connection: sqlite3.Connection, audio: dict[str, Any], request: JobCreate
+    connection: sqlite3.Connection, config: AppConfig, audio: dict[str, Any], request: JobCreate
 ) -> TranscriptProcessor:
     if request.transcription_provider == "placeholder":
         return PlaceholderProcessor(connection)
-    return WhisperXProcessor(connection, audio, request, import_whisperx())
+    return WhisperXProcessor(connection, audio, request, import_whisperx(), config)
 
 
 class TranscriptService:
@@ -651,8 +782,8 @@ class SettingsService:
     DEFAULTS = {
         "transcription_provider": "local",
         "transcription_model": "whisperx-small",
-        "diarization_provider": "local",
-        "diarization_model": "pyannote-local",
+        "diarization_provider": "none",
+        "diarization_model": "none",
         "language": None,
         "device": "auto",
         "compute_type": "int8",

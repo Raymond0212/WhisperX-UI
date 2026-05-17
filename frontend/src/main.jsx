@@ -3,6 +3,11 @@ import { createRoot } from "react-dom/client";
 import { Download, FileAudio, Play, Save, Trash2, Upload } from "lucide-react";
 import {
   DEFAULT_JOB_SETTINGS,
+  applySentenceUpdate,
+  applySpeakerRename,
+  buildModelPrepareRequest,
+  buildJobRequest,
+  createRangePlaybackController,
   formatTime,
   groupSpeakerTurns,
   mergeJobSettings,
@@ -23,7 +28,7 @@ async function api(path, options = {}) {
   return contentType.includes("application/json") ? response.json() : response.text();
 }
 
-function App() {
+export function App() {
   const [audioItems, setAudioItems] = useState([]);
   const [selectedAudio, setSelectedAudio] = useState(null);
   const [selectedJob, setSelectedJob] = useState(null);
@@ -32,30 +37,31 @@ function App() {
   const [sentences, setSentences] = useState([]);
   const [settings, setSettings] = useState({});
   const [jobSettings, setJobSettings] = useState(DEFAULT_JOB_SETTINGS);
+  const [localModels, setLocalModels] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isDraggingUpload, setIsDraggingUpload] = useState(false);
   const [viewMode, setViewMode] = useState("sentences");
   const [message, setMessage] = useState("");
   const audioRef = useRef(null);
-  const stopAtRef = useRef(null);
+  const playbackControllerRef = useRef(null);
 
   useEffect(() => {
     refreshLibrary();
     loadSettings();
+    loadModels();
   }, []);
 
   useEffect(() => {
     const player = audioRef.current;
     if (!player) return undefined;
-    const onTimeUpdate = () => {
-      if (stopAtRef.current !== null && player.currentTime >= stopAtRef.current) {
-        player.pause();
-        stopAtRef.current = null;
-      }
-    };
+    playbackControllerRef.current = createRangePlaybackController(player);
+    const onTimeUpdate = () => playbackControllerRef.current?.handleTimeUpdate();
     player.addEventListener("timeupdate", onTimeUpdate);
-    return () => player.removeEventListener("timeupdate", onTimeUpdate);
-  }, []);
+    return () => {
+      player.removeEventListener("timeupdate", onTimeUpdate);
+      playbackControllerRef.current = null;
+    };
+  }, [selectedAudio?.id]);
 
   async function refreshLibrary() {
     setAudioItems(await api("/api/audio"));
@@ -65,6 +71,10 @@ function App() {
     const loaded = await api("/api/settings");
     setSettings(loaded);
     setJobSettings(mergeJobSettings(loaded));
+  }
+
+  async function loadModels() {
+    setLocalModels(await api("/api/models"));
   }
 
   async function selectAudio(audio) {
@@ -141,11 +151,20 @@ function App() {
 
   async function processSelectedAudio() {
     if (!selectedAudio) return;
+    if (jobSettings.transcription_provider === "local") {
+      setMessage("Preparing local model...");
+      const prepared = await api("/api/models/prepare-basic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildModelPrepareRequest(jobSettings)),
+      });
+      setLocalModels(prepared.models);
+    }
     setMessage("Processing audio...");
     const job = await api("/api/jobs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ audio_file_id: selectedAudio.id, ...normalizeJobSettings(jobSettings) }),
+      body: JSON.stringify(buildJobRequest(selectedAudio.id, jobSettings)),
     });
     setJobs(await api(`/api/audio/${selectedAudio.id}/jobs`));
     await openJob(job);
@@ -158,7 +177,7 @@ function App() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ current_text: currentText }),
     });
-    setSentences((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+    setSentences((items) => applySentenceUpdate(items, updated));
   }
 
   async function renameSpeaker(speaker, displayName) {
@@ -167,12 +186,8 @@ function App() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ display_name: displayName }),
     });
-    setSpeakers((items) => items.map((item) => (item.id === updated.id ? updated : item)));
-    setSentences((items) =>
-      items.map((item) =>
-        item.speaker_id === updated.id ? { ...item, speaker_display_name: updated.display_name } : item,
-      ),
-    );
+    setSpeakers((items) => applySpeakerRename(items, [], updated).speakers);
+    setSentences((items) => applySpeakerRename([], items, updated).sentences);
   }
 
   async function saveSettings(event) {
@@ -192,13 +207,14 @@ function App() {
 
   function playRange(start, end) {
     const player = audioRef.current;
-    if (!player) return;
-    player.currentTime = start;
-    stopAtRef.current = end;
-    player.play();
+    if (!playbackControllerRef.current && player) {
+      playbackControllerRef.current = createRangePlaybackController(player);
+    }
+    playbackControllerRef.current?.playRange(start, end);
   }
 
   const speakerTurns = useMemo(() => groupSpeakerTurns(sentences), [sentences]);
+  const basicModel = localModels.find((model) => model.key === "whisperx-small");
 
   return (
     <main className="app-shell">
@@ -276,6 +292,10 @@ function App() {
               <audio ref={audioRef} controls src={`${API_BASE}/api/audio/${selectedAudio.id}/stream`} />
 
               <ModelConfig settings={jobSettings} onChange={updateJobSetting} />
+              <div className="model-status">
+                <strong>{basicModel?.downloaded ? "Local model ready" : "Local model will download on process"}</strong>
+                <span>{basicModel?.display_name || "WhisperX small"}</span>
+              </div>
 
               <div className="jobs-strip">
                 {jobs.map((job) => (
@@ -354,6 +374,10 @@ function ProviderModelFields({ settings, onChange }) {
       <label>
         Diarization model
         <input {...inputProps("diarization_model")} />
+      </label>
+      <label>
+        Diarization/HF token
+        <input {...inputProps("diarization_token")} type="password" placeholder="Optional for this run" />
       </label>
     </>
   );
@@ -508,7 +532,11 @@ function TranscriptReview({
       <section className="speaker-list">
         {speakers.map((speaker) => (
           <div className="speaker-row" key={speaker.id}>
-            <button type="button" onClick={() => onPlay(speaker.sample_start, speaker.sample_end)}>
+            <button
+              type="button"
+              aria-label={`Play sample for ${speaker.display_name}`}
+              onClick={() => onPlay(speaker.sample_start, speaker.sample_end)}
+            >
               <Play size={15} />
             </button>
             <code>{speaker.speaker_key}</code>
@@ -549,7 +577,11 @@ function SentenceList({ sentences, onPlay, onUpdateSentence }) {
     <div className="sentence-list">
       {sentences.map((sentence) => (
         <article className="sentence-row" key={sentence.id}>
-          <button type="button" onClick={() => onPlay(sentence.start_time, sentence.end_time)}>
+          <button
+            type="button"
+            aria-label={`Play sentence ${sentence.sentence_index ?? sentence.id}`}
+            onClick={() => onPlay(sentence.start_time, sentence.end_time)}
+          >
             <Play size={15} />
           </button>
           <span className="timestamp">
@@ -566,4 +598,7 @@ function SentenceList({ sentences, onPlay, onUpdateSentence }) {
   );
 }
 
-createRoot(document.getElementById("root")).render(<App />);
+const rootElement = document.getElementById("root");
+if (rootElement) {
+  createRoot(rootElement).render(<App />);
+}

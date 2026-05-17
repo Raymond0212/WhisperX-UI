@@ -21,6 +21,8 @@ WhisperX UI is a single-user local application. The default threat model is loca
 
 Current implementation strips `online_api_keys` and key names containing `api_key`, `token`, or `secret` before persisting app settings or job settings. The settings API returns `online_api_keys` as an empty object.
 
+The basic model preparation API may receive a Hugging Face token for private or gated downloads. That token is passed only to the download call and is not returned in model status responses or persisted in app settings.
+
 ## File Handling
 
 - Uploaded files should be stored under the configured application data directory.

@@ -65,14 +65,19 @@ Build the first working local WhisperX UI from the documented MVP requirements: 
 
 ## Current Implementation Status
 
-- Backend API implements upload/list/get/title edit/soft delete/stream, job create/get/list, transcript edit, speaker rename, settings, and VTT export.
+- Backend API implements upload/list/get/title edit/soft delete/stream, basic local model status/download, job create/get/list, transcript edit, speaker rename, settings, and VTT export.
 - Uploads normalize MIME type from supported audio extensions when needed and stream only stored paths contained under the configured uploads directory.
 - Job settings and failure messages are persisted. Secret-like keys and `online_api_keys` are stripped from persisted settings.
+- The default one-click path prepares the basic local Hugging Face transcription model, `Systran/faster-whisper-small`, under `app_data/models/` when missing.
 - The default `local` provider attempts WhisperX and records a clear failed job if WhisperX cannot be imported. The explicit `placeholder` provider creates deterministic demo transcript, speaker, and VTT data.
-- The tested WhisperX path uses a fake WhisperX module to verify segment-to-sentence chunking and persistence. Real WhisperX runtime and model execution remain unverified in this repository state.
+- The tested WhisperX path uses a fake WhisperX module to verify segment-to-sentence chunking, optional alignment, diarization assignment, speaker-limit forwarding, local model path resolution, and persistence.
+- Enabled diarization now fails the job clearly when WhisperX output has no speaker labels. Setting `diarization_provider` to `"none"` fully disables diarization, even when a transient diarization/HF token is present in request settings.
+- Zero basic configuration defaults diarization to `"none"` because the baseline transcription model is public while diarization models may require an explicit Hugging Face token or accepted model terms.
+- Real WhisperX and pyannote runtime/model execution remain externally unverified in this repository state.
 - Transcript sentence edits update `current_text` while preserving `original_text`, timestamps, and speaker assignment. Speaker rename updates `display_name` while preserving `speaker_key`.
-- Frontend includes drag/drop upload, title editing, model config controls, audio playback, speaker and sentence review, speaker-turn grouping, settings, and VTT export links.
-- Python tests currently pass: `uv run pytest` collected 19 tests and all passed. Frontend test script exists, but Node.js/npm were not available in this environment, so frontend tests were not run here.
+- Frontend includes drag/drop upload, title editing, model config controls, one-click basic local model preparation, transient Diarization/HF token entry for a single job request, audio playback, speaker and sentence review, speaker-turn grouping, settings, and VTT export links.
+- Frontend helpers for job settings normalization, model preparation request construction, job request construction, speaker-turn grouping, local transcript updates, and range playback are extracted into `frontend/src/jobUtils.js`.
+- Current verification from the final implementation loop: bundled Python 3.12 backend pytest passes 28/28; `npm test` passes 9 Node utility tests plus 1 mounted Vitest/JSDOM workflow test; `npm run build` passes; `git diff --check` passes.
 
 ## Deferred Work
 
@@ -86,5 +91,4 @@ Build the first working local WhisperX UI from the documented MVP requirements: 
 - Waveform display
 - Batch uploads
 - Extra export formats
-- Model download manager
 - Electron OS keychain integration

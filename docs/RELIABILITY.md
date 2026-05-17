@@ -22,7 +22,9 @@ Real-time progress is not required for MVP. The UI may show a simple processing 
 
 Processing should avoid partial success states that look completed. If transcript or speaker persistence fails, the job should be treated as failed unless the implementation has an explicit recovery path.
 
-The explicit `placeholder` provider is deterministic demo output. The local provider attempts WhisperX import and execution; fake-module tests cover segment chunking into sentence rows, but real WhisperX runtime/model execution remains unverified here.
+The explicit `placeholder` provider is deterministic demo output. The local provider attempts WhisperX import and execution; fake-module tests cover segment chunking into sentence rows, alignment, diarization assignment, no-label failure behavior, local model path resolution, and the `diarization_provider: "none"` bypass. Real WhisperX, pyannote, model loading, and hardware execution remain unverified here.
+
+The basic model preparation path downloads `Systran/faster-whisper-small` from Hugging Face into `app_data/models/` using `huggingface_hub.snapshot_download`. Download failures should surface as request failures instead of starting a processing job with a missing model.
 
 ## Data Retention
 

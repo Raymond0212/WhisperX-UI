@@ -15,6 +15,9 @@ from .schemas import (
     AudioUpdate,
     JobCreate,
     JobOut,
+    LocalModelOut,
+    ModelPrepareOut,
+    ModelPrepareRequest,
     SettingsUpdate,
     SpeakerOut,
     SpeakerUpdate,
@@ -24,6 +27,7 @@ from .schemas import (
 from .services import (
     AudioService,
     JobService,
+    ModelService,
     SettingsService,
     SpeakerService,
     TranscriptService,
@@ -68,8 +72,10 @@ def audio_service(
     return AudioService(connection, config)
 
 
-def job_service(connection=Depends(get_connection)) -> JobService:
-    return JobService(connection)
+def job_service(
+    connection=Depends(get_connection), config: AppConfig = Depends(get_app_config)
+) -> JobService:
+    return JobService(connection, config)
 
 
 def transcript_service(connection=Depends(get_connection)) -> TranscriptService:
@@ -82,6 +88,10 @@ def speaker_service(connection=Depends(get_connection)) -> SpeakerService:
 
 def settings_service(connection=Depends(get_connection)) -> SettingsService:
     return SettingsService(connection)
+
+
+def model_service(config: AppConfig = Depends(get_app_config)) -> ModelService:
+    return ModelService(config)
 
 
 @app.get("/api/health")
@@ -132,6 +142,19 @@ def stream_audio(audio_id: str, service: AudioService = Depends(audio_service)):
 @app.post("/api/jobs", response_model=JobOut)
 def create_job(request: JobCreate, service: JobService = Depends(job_service)):
     return service.create_and_run(request)
+
+
+@app.get("/api/models", response_model=list[LocalModelOut])
+def list_models(service: ModelService = Depends(model_service)):
+    return service.list_models()
+
+
+@app.post("/api/models/prepare-basic", response_model=ModelPrepareOut)
+def prepare_basic_models(
+    request: ModelPrepareRequest,
+    service: ModelService = Depends(model_service),
+):
+    return service.prepare_basic(request)
 
 
 @app.get("/api/jobs/{job_id}", response_model=JobOut)

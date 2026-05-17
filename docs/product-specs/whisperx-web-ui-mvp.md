@@ -33,6 +33,7 @@ User opens app
 -> optionally edits audio title
 -> optionally configures transcription and diarization models
 -> clicks one process button
+-> app downloads the basic local transcription model if it is missing
 -> waits while processing completes
 -> reviews sentence-level transcript with speaker labels
 -> plays audio by clicking transcript sentences or speaker samples
@@ -185,6 +186,7 @@ MVP save behavior should use save-on-blur or short debounce autosave.
 | MC-005 | User can provide API keys for online models. |
 | MC-006 | Model settings used for a job are persisted. |
 | MC-007 | Different uploads or jobs may use different model settings. |
+| MC-008 | The basic local transcription model can be downloaded automatically before first local processing. |
 
 Transcription settings may include provider, model, language, device, compute type, batch size, and alignment model. Diarization settings may include provider, model, speaker count, min speakers, max speakers, device, and token/API key when required.
 
@@ -314,4 +316,4 @@ Recommended stored filename format:
 
 ## Post-MVP
 
-Deferred features include manual speaker reassignment, transcript version history, word-level editing, waveform display, real-time progress, job cancellation, batch uploads, extra exports, model download manager, OS keychain integration, permanent deletion, advanced diarization correction, transcript search, and tagging.
+Deferred features include manual speaker reassignment, transcript version history, word-level editing, waveform display, real-time progress, job cancellation, batch uploads, extra exports, advanced model management, OS keychain integration, permanent deletion, advanced diarization correction, transcript search, and tagging.

@@ -1,8 +1,8 @@
 export const DEFAULT_JOB_SETTINGS = {
   transcription_provider: "local",
   transcription_model: "whisperx-small",
-  diarization_provider: "local",
-  diarization_model: "pyannote-local",
+  diarization_provider: "none",
+  diarization_model: "none",
   language: "",
   device: "auto",
   compute_type: "int8",
@@ -57,8 +57,8 @@ export function normalizeJobSettings(settings) {
   return {
     transcription_provider: settings.transcription_provider || "local",
     transcription_model: settings.transcription_model || "whisperx-small",
-    diarization_provider: settings.diarization_provider || "local",
-    diarization_model: settings.diarization_model || "pyannote-local",
+    diarization_provider: settings.diarization_provider || "none",
+    diarization_model: settings.diarization_model || "none",
     language: settings.language || null,
     device: settings.device || "auto",
     compute_type: settings.compute_type || "int8",
@@ -66,5 +66,70 @@ export function normalizeJobSettings(settings) {
     speaker_count: numberOrNull(settings.speaker_count),
     min_speakers: numberOrNull(settings.min_speakers),
     max_speakers: numberOrNull(settings.max_speakers),
+  };
+}
+
+export function buildModelPrepareRequest(settings) {
+  const request = {
+    profile: "basic",
+    transcription_model: settings.transcription_model || "whisperx-small",
+  };
+  const hfToken = settings.diarization_token?.trim();
+  if (hfToken) {
+    request.hf_token = hfToken;
+  }
+  return request;
+}
+
+export function buildJobRequest(audioFileId, settings) {
+  const request = {
+    audio_file_id: audioFileId,
+    ...normalizeJobSettings(settings),
+  };
+  const diarizationToken = settings.diarization_token?.trim();
+  if (diarizationToken) {
+    request.settings = { diarization_token: diarizationToken };
+  }
+  return request;
+}
+
+export function applySpeakerRename(speakers, sentences, updatedSpeaker) {
+  return {
+    speakers: speakers.map((speaker) =>
+      speaker.id === updatedSpeaker.id ? updatedSpeaker : speaker,
+    ),
+    sentences: sentences.map((sentence) =>
+      sentence.speaker_id === updatedSpeaker.id
+        ? { ...sentence, speaker_display_name: updatedSpeaker.display_name }
+        : sentence,
+    ),
+  };
+}
+
+export function applySentenceUpdate(sentences, updatedSentence) {
+  return sentences.map((sentence) =>
+    sentence.id === updatedSentence.id ? updatedSentence : sentence,
+  );
+}
+
+export function createRangePlaybackController(player) {
+  let stopAt = null;
+  return {
+    playRange(start, end) {
+      if (!player) return;
+      player.currentTime = start;
+      stopAt = end;
+      player.play();
+    },
+    handleTimeUpdate() {
+      if (!player || stopAt === null) return;
+      if (player.currentTime >= stopAt) {
+        player.pause();
+        stopAt = null;
+      }
+    },
+    getStopAt() {
+      return stopAt;
+    },
   };
 }

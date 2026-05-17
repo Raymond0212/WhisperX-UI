@@ -29,8 +29,8 @@ class JobCreate(BaseModel):
     audio_file_id: str
     transcription_provider: str = "local"
     transcription_model: str = "whisperx-small"
-    diarization_provider: str = "local"
-    diarization_model: str = "pyannote-local"
+    diarization_provider: str = "none"
+    diarization_model: str = "none"
     language: str | None = None
     device: str = "auto"
     compute_type: str = "int8"
@@ -104,3 +104,24 @@ class SettingsUpdate(BaseModel):
 
     settings: dict[str, Any] = Field(default_factory=dict)
 
+
+class LocalModelOut(BaseModel):
+    key: str
+    display_name: str
+    repo_id: str
+    local_path: str
+    downloaded: bool
+    required_for_basic: bool
+    notes: str | None = None
+
+
+class ModelPrepareRequest(BaseModel):
+    profile: str = "basic"
+    transcription_model: str = "whisperx-small"
+    hf_token: str | None = None
+
+
+class ModelPrepareOut(BaseModel):
+    profile: str
+    ready: bool
+    models: list[LocalModelOut]

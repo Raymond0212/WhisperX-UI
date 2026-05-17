@@ -151,6 +151,58 @@ def test_stream_normalizes_legacy_non_audio_stored_mime_type(client):
     assert stream_response.headers["content-type"].startswith("audio/mpeg")
 
 
+def test_prepare_basic_models_downloads_faster_whisper_to_local_models_dir(client, monkeypatch):
+    calls = {}
+    services_module = importlib.import_module("whisperx_ui_backend.services")
+
+    def fake_download_hf_snapshot(*, repo_id, local_dir, cache_dir, token):
+        calls["repo_id"] = repo_id
+        calls["local_dir"] = local_dir
+        calls["cache_dir"] = cache_dir
+        calls["token"] = token
+        local_dir.mkdir(parents=True, exist_ok=True)
+        (local_dir / "model.bin").write_bytes(b"fake model")
+        return str(local_dir)
+
+    monkeypatch.setattr(services_module, "download_hf_snapshot", fake_download_hf_snapshot)
+
+    initial_response = client.get("/api/models")
+    assert initial_response.status_code == 200
+    assert initial_response.json()[0]["downloaded"] is False
+
+    response = client.post(
+        "/api/models/prepare-basic",
+        json={"profile": "basic", "transcription_model": "whisperx-small", "hf_token": "secret"},
+    )
+
+    assert response.status_code == 200, response.text
+    prepared = response.json()
+    assert prepared["ready"] is True
+    model = prepared["models"][0]
+    assert model["key"] == "whisperx-small"
+    assert model["repo_id"] == "Systran/faster-whisper-small"
+    assert model["downloaded"] is True
+    assert model["local_path"].endswith("app_data/models/Systran--faster-whisper-small")
+    assert calls["repo_id"] == "Systran/faster-whisper-small"
+    assert calls["token"] == "secret"
+    assert calls["cache_dir"].name == ".hf-cache"
+    assert "secret" not in response.text
+
+    list_response = client.get("/api/models")
+    assert list_response.status_code == 200
+    assert list_response.json()[0]["downloaded"] is True
+
+
+def test_prepare_basic_models_rejects_unknown_model(client):
+    response = client.post(
+        "/api/models/prepare-basic",
+        json={"profile": "basic", "transcription_model": "unknown"},
+    )
+
+    assert response.status_code == 400
+    assert "Unsupported basic transcription model" in response.json()["detail"]
+
+
 def test_stream_after_delete_missing_file_and_invalid_stored_path(client, tmp_path):
     deleted_audio = upload_audio(client)
     assert client.delete(f"/api/audio/{deleted_audio['id']}").status_code == 204
@@ -258,7 +310,7 @@ def test_job_failure_persists_failed_status_and_message(client, monkeypatch):
     monkeypatch.setattr(
         services_module,
         "create_processor",
-        lambda connection, audio, request: FailingProcessor(),
+        lambda connection, config, audio, request: FailingProcessor(),
     )
 
     audio = upload_audio(client)
@@ -289,6 +341,8 @@ def test_default_local_job_fails_when_whisperx_is_unavailable(client, monkeypatc
         json={
             "audio_file_id": audio["id"],
             "transcription_model": "whisperx-small",
+            "diarization_provider": "none",
+            "diarization_model": "none",
         },
     )
 
@@ -298,6 +352,219 @@ def test_default_local_job_fails_when_whisperx_is_unavailable(client, monkeypatc
     assert "WhisperX is not installed" in job["error_message"]
     assert 'transcription_provider "placeholder"' in job["error_message"]
     assert job["completed_at"] is not None
+
+
+def test_local_whisperx_fails_when_diarization_enabled_but_no_speaker_labels(
+    client, monkeypatch
+):
+    class SpeakerlessModel:
+        def transcribe(self, audio_path, batch_size, language):
+            return {
+                "language": "en",
+                "segments": [{"start": 0.0, "end": 2.0, "text": "Speaker unknown."}],
+            }
+
+    fake_whisperx = SimpleNamespace(
+        load_model=lambda model, device, compute_type, language: SpeakerlessModel()
+    )
+    services_module = importlib.import_module("whisperx_ui_backend.services")
+    monkeypatch.setattr(services_module, "import_whisperx", lambda: fake_whisperx)
+
+    audio = upload_audio(client)
+    response = client.post(
+        "/api/jobs",
+        json={
+            "audio_file_id": audio["id"],
+            "transcription_model": "whisperx-small",
+            "diarization_provider": "local",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    job = response.json()
+    assert job["status"] == "failed"
+    assert "Diarization did not produce speaker labels" in job["error_message"]
+    assert 'diarization_provider "none"' in job["error_message"]
+
+
+def test_diarization_none_allows_speakerless_whisperx_output_as_single_speaker(
+    client, monkeypatch
+):
+    calls = {}
+
+    class SpeakerlessModel:
+        def transcribe(self, audio_path, batch_size, language):
+            return {
+                "language": "en",
+                "segments": [{"start": 0.0, "end": 2.0, "text": "Speaker unknown."}],
+            }
+
+    class FakeDiarizationPipeline:
+        def __init__(self, use_auth_token, device):
+            calls["diarization_init"] = {"use_auth_token": use_auth_token, "device": device}
+
+        def __call__(self, audio_path, **kwargs):
+            calls["diarization_call"] = kwargs
+            return [{"start": 0.0, "end": 2.0, "speaker": "SPEAKER_99"}]
+
+    fake_whisperx = SimpleNamespace(
+        load_model=lambda model, device, compute_type, language: SpeakerlessModel(),
+        DiarizationPipeline=FakeDiarizationPipeline,
+    )
+    services_module = importlib.import_module("whisperx_ui_backend.services")
+    monkeypatch.setattr(services_module, "import_whisperx", lambda: fake_whisperx)
+
+    audio = upload_audio(client)
+    response = client.post(
+        "/api/jobs",
+        json={
+            "audio_file_id": audio["id"],
+            "transcription_model": "whisperx-small",
+            "diarization_provider": "none",
+            "diarization_model": "none",
+            "settings": {"diarization_token": "runtime-token"},
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    job = response.json()
+    assert job["status"] == "completed"
+    assert calls == {}
+
+    transcript = client.get(f"/api/jobs/{job['id']}/transcript").json()
+    assert [sentence["speaker_key"] for sentence in transcript] == ["SPEAKER_00"]
+
+
+def test_local_whisperx_uses_downloaded_model_path_when_available(client, monkeypatch):
+    captured = {}
+
+    class SpeakerlessModel:
+        def transcribe(self, audio_path, batch_size, language):
+            return {
+                "language": "en",
+                "segments": [{"start": 0.0, "end": 2.0, "text": "Downloaded model."}],
+            }
+
+    def load_model(model, device, compute_type, language):
+        captured["model"] = model
+        return SpeakerlessModel()
+
+    services_module = importlib.import_module("whisperx_ui_backend.services")
+    app_module = importlib.import_module("whisperx_ui_backend.app")
+    model_path = services_module.local_model_path(
+        app_module.app.state.config,
+        "whisperx-small",
+    )
+    model_path.mkdir(parents=True, exist_ok=True)
+    (model_path / "model.bin").write_bytes(b"fake model")
+
+    fake_whisperx = SimpleNamespace(load_model=load_model)
+    monkeypatch.setattr(services_module, "import_whisperx", lambda: fake_whisperx)
+
+    audio = upload_audio(client)
+    response = client.post(
+        "/api/jobs",
+        json={
+            "audio_file_id": audio["id"],
+            "transcription_model": "whisperx-small",
+            "diarization_provider": "none",
+            "diarization_model": "none",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "completed"
+    assert captured["model"] == str(model_path)
+
+
+def test_whisperx_processor_runs_alignment_and_diarization_assignment_with_speaker_limits(
+    client, monkeypatch
+):
+    calls = {}
+
+    class FakeModel:
+        def transcribe(self, audio_path, batch_size, language):
+            return {
+                "language": "en",
+                "segments": [{"start": 0.0, "end": 3.0, "text": "Aligned words."}],
+            }
+
+    class FakeDiarizationPipeline:
+        def __init__(self, use_auth_token, device):
+            calls["diarization_init"] = {"use_auth_token": use_auth_token, "device": device}
+
+        def __call__(self, audio_path, **kwargs):
+            calls["diarization_call"] = kwargs
+            return [{"start": 0.0, "end": 3.0, "speaker": "SPEAKER_04"}]
+
+    def align(segments, align_model, metadata, audio_path, device, return_char_alignments):
+        calls["align"] = {
+            "segments": segments,
+            "align_model": align_model,
+            "metadata": metadata,
+            "device": device,
+            "return_char_alignments": return_char_alignments,
+        }
+        return {
+            "language": "en",
+            "segments": [
+                {
+                    "start": 0.0,
+                    "end": 3.0,
+                    "text": "Aligned words.",
+                    "words": [
+                        {"word": "Aligned", "start": 0.0, "end": 1.0},
+                        {"word": "words.", "start": 1.1, "end": 2.5},
+                    ],
+                }
+            ],
+        }
+
+    def assign_word_speakers(speaker_segments, result):
+        calls["speaker_segments"] = speaker_segments
+        result["segments"][0]["words"][0]["speaker"] = "SPEAKER_04"
+        result["segments"][0]["words"][1]["speaker"] = "SPEAKER_04"
+        return result
+
+    fake_whisperx = SimpleNamespace(
+        load_model=lambda model, device, compute_type, language: FakeModel(),
+        load_align_model=lambda language_code, device: ("align-model", {"language": language_code}),
+        align=align,
+        DiarizationPipeline=FakeDiarizationPipeline,
+        assign_word_speakers=assign_word_speakers,
+    )
+    services_module = importlib.import_module("whisperx_ui_backend.services")
+    monkeypatch.setattr(services_module, "import_whisperx", lambda: fake_whisperx)
+
+    audio = upload_audio(client)
+    response = client.post(
+        "/api/jobs",
+        json={
+            "audio_file_id": audio["id"],
+            "transcription_model": "whisperx-small",
+            "diarization_provider": "local",
+            "diarization_model": "pyannote-local",
+            "speaker_count": 2,
+            "min_speakers": 1,
+            "max_speakers": 4,
+            "settings": {"diarization_token": "runtime-token"},
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    job = response.json()
+    assert job["status"] == "completed"
+    assert job["settings"]["settings"] == {}
+    assert calls["align"]["return_char_alignments"] is False
+    assert calls["diarization_init"] == {"use_auth_token": "runtime-token", "device": "cpu"}
+    assert calls["diarization_call"] == {
+        "num_speakers": 2,
+        "min_speakers": 1,
+        "max_speakers": 4,
+    }
+    transcript = client.get(f"/api/jobs/{job['id']}/transcript").json()
+    assert transcript[0]["speaker_key"] == "SPEAKER_04"
+    assert [word["speaker"] for word in transcript[0]["words"]] == ["SPEAKER_04", "SPEAKER_04"]
 
 
 def test_explicit_placeholder_still_completes_when_whisperx_is_unavailable(client, monkeypatch):
@@ -360,6 +627,8 @@ def test_whisperx_processor_converts_and_persists_sentence_chunks(client, monkey
         json={
             "audio_file_id": audio["id"],
             "transcription_model": "whisperx-small",
+            "diarization_provider": "none",
+            "diarization_model": "none",
         },
     )
 
@@ -405,6 +674,8 @@ def test_whisperx_processor_empty_result_fails_job(client, monkeypatch):
         json={
             "audio_file_id": audio["id"],
             "transcription_model": "whisperx-small",
+            "diarization_provider": "none",
+            "diarization_model": "none",
         },
     )
 
@@ -448,6 +719,63 @@ def test_soft_delete_hides_audio_and_marks_jobs_deleted(client):
     job_response = client.get(f"/api/jobs/{job['id']}")
     assert job_response.status_code == 200
     assert job_response.json()["status"] == "deleted"
+
+
+def test_create_job_rejects_deleted_audio(client):
+    audio = upload_audio(client)
+    assert client.delete(f"/api/audio/{audio['id']}").status_code == 204
+
+    response = client.post(
+        "/api/jobs",
+        json={
+            "audio_file_id": audio["id"],
+            "transcription_provider": "placeholder",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Audio file not found"
+
+
+def test_export_missing_transcript_returns_not_found(client):
+    audio = upload_audio(client)
+    response = client.post(
+        "/api/jobs",
+        json={
+            "audio_file_id": audio["id"],
+            "transcription_provider": "placeholder",
+        },
+    )
+    assert response.status_code == 200
+    job_id = response.json()["id"]
+
+    connection = app_connection()
+    connection.execute("DELETE FROM transcript_sentences WHERE job_id = ?", (job_id,))
+    connection.commit()
+
+    export_response = client.get(f"/api/jobs/{job_id}/export.vtt")
+    assert export_response.status_code == 404
+    assert export_response.json()["detail"] == "Transcript not found"
+
+
+def test_request_validation_rejects_invalid_title_and_speaker_limits(client):
+    audio = upload_audio(client)
+
+    title_response = client.patch(
+        f"/api/audio/{audio['id']}",
+        json={"display_title": ""},
+    )
+    assert title_response.status_code == 422
+
+    job_response = client.post(
+        "/api/jobs",
+        json={
+            "audio_file_id": audio["id"],
+            "transcription_provider": "placeholder",
+            "speaker_count": 0,
+        },
+    )
+    assert job_response.status_code == 422
 
 
 def test_settings_do_not_persist_plain_api_keys(client):

@@ -217,6 +217,25 @@ audio {
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
 }
 
+.model-status {
+  align-items: center;
+  background: #eef6ee;
+  border: 1px solid #c7dfc8;
+  border-radius: 8px;
+  color: #1f4d2b;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: space-between;
+  margin: -0.35rem 0 1rem;
+  padding: 0.7rem 0.85rem;
+}
+
+.model-status span {
+  color: #48634f;
+  font-size: 0.88rem;
+}
+
 .jobs-strip {
   margin-bottom: 1rem;
 }
