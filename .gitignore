@@ -206,6 +206,16 @@ tempCodeRunnerFile.py
 # Ruff stuff:
 .ruff_cache/
 
+# WhisperX UI runtime data
+app_data/
+*.sqlite
+*.sqlite-journal
+
+# Frontend dependencies and build outputs
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
 # PyPI configuration file
 .pypirc
 
