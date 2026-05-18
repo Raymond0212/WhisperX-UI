@@ -1,0 +1,22 @@
+{
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 2.0,
+      "text": "a b a b",
+      "words": [
+        {"word": "a", "start": 0.0, "end": 0.4},
+        {"word": "b", "start": 0.45, "end": 0.8},
+        {"word": "a", "start": 0.85, "end": 1.2},
+        {"word": "b", "start": 1.25, "end": 1.6}
+      ]
+    }
+  ],
+  "intervals": [
+    {"start": 0.0, "end": 0.5, "speaker": "A"},
+    {"start": 0.5, "end": 0.9, "speaker": "B"},
+    {"start": 0.9, "end": 1.3, "speaker": "A"},
+    {"start": 1.3, "end": 1.8, "speaker": "B"}
+  ],
+  "expected_word_speakers": ["A", "B", "A", "B"]
+}

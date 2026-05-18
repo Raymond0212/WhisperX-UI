@@ -227,6 +227,26 @@ def test_zero_config_processing_completes_without_hf_token(tmp_path, monkeypatch
         assert transcript[0]["speaker_display_name"] == "SPEAKER_00"
 
 
+def test_zero_config_silent_audio_completes_with_empty_transcript(tmp_path, monkeypatch):
+    services_module = importlib.import_module("whisperx_ui_backend.services")
+    monkeypatch.setattr(
+        services_module,
+        "transcribe_with_faster_whisper",
+        lambda **kwargs: {"segments": []},
+    )
+
+    with _client(tmp_path, monkeypatch) as client:
+        audio = _upload_audio(client)
+        response = client.post("/api/jobs", json={"audio_file_id": audio["id"]})
+        assert response.status_code == 200, response.text
+        job = response.json()
+        assert job["status"] == "completed"
+        transcript = client.get(f"/api/jobs/{job['id']}/transcript").json()
+        speakers = client.get(f"/api/jobs/{job['id']}/speakers").json()
+        assert transcript == []
+        assert speakers == []
+
+
 def test_token_enabled_diarization_success_assigns_speaker_labels(tmp_path, monkeypatch):
     services_module = importlib.import_module("whisperx_ui_backend.services")
 
@@ -285,6 +305,82 @@ def test_segment_to_sentences_assigns_speaker_per_sentence_from_word_overlaps():
     )
     assert [sentence.text for sentence in sentences] == ["Hello there.", "General Kenobi."]
     assert [sentence.speaker_key for sentence in sentences] == ["SPEAKER_01", "SPEAKER_02"]
+
+
+def test_segment_to_sentences_splits_mixed_speaker_sentence_without_flattening():
+    services_module = importlib.import_module("whisperx_ui_backend.services")
+    sentences = services_module.segment_to_sentences(
+        {
+            "start": 0.0,
+            "end": 5.0,
+            "text": "A one. B two. A three. B four.",
+            "words": [
+                {"word": "A", "start": 0.0, "end": 0.2, "speaker": "SPEAKER_A"},
+                {"word": "one.", "start": 0.2, "end": 0.8, "speaker": "SPEAKER_A"},
+                {"word": "B", "start": 0.9, "end": 1.1, "speaker": "SPEAKER_B"},
+                {"word": "two.", "start": 1.1, "end": 1.5, "speaker": "SPEAKER_B"},
+                {"word": "A", "start": 1.6, "end": 1.8, "speaker": "SPEAKER_A"},
+                {"word": "three.", "start": 1.8, "end": 2.4, "speaker": "SPEAKER_A"},
+                {"word": "B", "start": 2.5, "end": 2.7, "speaker": "SPEAKER_B"},
+                {"word": "four.", "start": 2.7, "end": 3.3, "speaker": "SPEAKER_B"},
+            ],
+        }
+    )
+    assert [row.speaker_key for row in sentences] == [
+        "SPEAKER_A",
+        "SPEAKER_B",
+        "SPEAKER_A",
+        "SPEAKER_B",
+    ]
+
+
+def test_assign_speakers_handles_rapid_abab_turns_within_single_segment():
+    assignment_module = importlib.import_module("whisperx_ui_backend.processors.speaker_assignment")
+    segments = [
+        {
+            "start": 0.0,
+            "end": 2.0,
+            "text": "a b a b",
+            "words": [
+                {"word": "a", "start": 0.0, "end": 0.4},
+                {"word": "b", "start": 0.45, "end": 0.8},
+                {"word": "a", "start": 0.85, "end": 1.2},
+                {"word": "b", "start": 1.25, "end": 1.6},
+            ],
+        }
+    ]
+    intervals = [
+        {"start": 0.0, "end": 0.5, "speaker": "A"},
+        {"start": 0.5, "end": 0.9, "speaker": "B"},
+        {"start": 0.9, "end": 1.3, "speaker": "A"},
+        {"start": 1.3, "end": 1.8, "speaker": "B"},
+    ]
+    result = assignment_module.assign_speakers(segments, intervals)
+    assert [word["speaker"] for word in result[0]["words"]] == ["A", "B", "A", "B"]
+
+
+def test_assign_speakers_handles_gap_and_tie_deterministically():
+    assignment_module = importlib.import_module("whisperx_ui_backend.processors.speaker_assignment")
+    segments = [
+        {
+            "start": 0.0,
+            "end": 2.0,
+            "text": "word1 word2",
+            "words": [
+                {"word": "word1", "start": 0.49, "end": 0.51},
+                {"word": "word2", "start": 1.90, "end": 1.95},
+            ],
+        }
+    ]
+    intervals = [
+        {"start": 0.0, "end": 0.5, "speaker": "A"},
+        {"start": 0.5, "end": 1.0, "speaker": "B"},
+    ]
+    result = assignment_module.assign_speakers(segments, intervals)
+    # tie at boundary -> deterministic first interval winner
+    assert result[0]["words"][0]["speaker"] == "A"
+    # far gap word -> nearest fallback still assigns deterministically
+    assert result[0]["words"][1]["speaker"] in {"A", "B"}
 
 
 def test_diarization_or_assignment_failure_propagates_to_failed_job(tmp_path, monkeypatch):

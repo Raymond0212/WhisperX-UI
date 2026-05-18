@@ -105,6 +105,20 @@ Update backend dependencies to support:
 
 Keep existing FastAPI dependencies.
 
+### Local verification commands
+
+Use repository scripts for repeatable checks:
+
+- `./scripts/run-backend-tests.sh`
+- `./scripts/smoke-check-local-runtime.sh`
+- `HF_TOKEN=hf_xxx ./scripts/smoke-check-local-runtime.sh` for token-enabled diarization path
+- `./scripts/download-diarization-benchmark.sh`
+- `./scripts/run-diarization-benchmark.sh`
+- `./scripts/download-real-diarization-benchmark.sh` (auto-bootstraps `benchmarks/real-audio/manifest.json` from a small public subset by default)
+- `HF_TOKEN=hf_xxx ./scripts/run-real-diarization-benchmark.sh`
+
+Caveat-closure verification achieved a network-enabled no-token smoke pass with `./scripts/smoke-check-local-runtime.sh`, including dependency installation, Hugging Face model download, in-process FastAPI job completion, and transcript-list retrieval.
+
 ---
 
 ### 2. Add a model registry module
@@ -191,7 +205,10 @@ Rules:
 
 - Prefer word-level speaker assignment when word timestamps exist.
 - Assign each word to the diarization speaker interval with the strongest timestamp overlap.
-- Assign each transcript sentence to the speaker with the strongest accumulated assigned word duration, so different sentences from the same faster-whisper segment can persist different speakers.
+- Resolve overlap ties deterministically by keeping the first matching diarization interval.
+- Assign words in diarization gaps to the nearest interval so rapid speaker-change behavior stays deterministic.
+- Persist speaker changes inside a faster-whisper sentence window as separate speaker-consistent sub-sentence rows instead of flattening mixed-speaker content to a single speaker.
+- Assign single-speaker transcript sentence rows to the speaker with the strongest accumulated assigned word duration.
 - If word timestamps are unavailable, use segment-level overlap.
 - If token-enabled diarization runs but no speaker can be assigned, fail clearly instead of silently producing fake labels. The explicit no-token path is a documented single-speaker fallback.
 

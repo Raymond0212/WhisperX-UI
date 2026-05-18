@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "description": "User-provided real-audio diarization benchmark cases",
+  "cases": [
+    {
+      "id": "example_case_1",
+      "audio_path": "benchmarks/real-audio/data/example_case_1.wav",
+      "reference_path": "benchmarks/real-audio/data/example_case_1.reference.json",
+      "provenance": {
+        "source": "user-provided",
+        "license": "must allow local benchmarking use",
+        "notes": "replace with real provenance details"
+      },
+      "download": {
+        "audio_url": "",
+        "reference_url": "",
+        "audio_sha256": "",
+        "reference_sha256": ""
+      }
+    }
+  ]
+}

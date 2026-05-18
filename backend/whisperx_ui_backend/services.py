@@ -494,6 +494,18 @@ def segment_to_sentences(segment: dict[str, Any]) -> list[ProcessorSentence]:
     segment_words = segment.get("words") or []
     segment_speaker = segment.get("speaker") or _speaker_from_words(segment_words) or "SPEAKER_00"
 
+    timed_words = [
+        word
+        for word in segment_words
+        if isinstance(word.get("start"), int | float) and isinstance(word.get("end"), int | float)
+    ]
+    if timed_words and len(timed_words) == len(segment_words):
+        return _sentences_from_timed_words(
+            words=timed_words,
+            fallback_speaker=segment_speaker,
+            confidence=segment.get("confidence"),
+        )
+
     sentences: list[ProcessorSentence] = []
     for start_index, end_index, sentence_text in matches:
         sentence_start = start_time + duration * (start_index / text_length)
@@ -501,18 +513,47 @@ def segment_to_sentences(segment: dict[str, Any]) -> list[ProcessorSentence]:
         if sentence_end <= sentence_start:
             sentence_end = end_time
         words = _words_for_sentence(segment_words, sentence_start, sentence_end, sentence_text)
-        sentence_speaker = _speaker_for_sentence(words, segment_speaker)
-        sentences.append(
-            ProcessorSentence(
-                speaker_key=sentence_speaker,
-                start_time=sentence_start,
-                end_time=sentence_end,
-                text=sentence_text,
-                confidence=segment.get("confidence"),
+        sentences.extend(
+            _sentence_rows_from_words(
+                sentence_text=sentence_text,
+                sentence_start=sentence_start,
+                sentence_end=sentence_end,
                 words=words,
+                fallback_speaker=segment_speaker,
+                confidence=segment.get("confidence"),
             )
         )
     return sentences
+
+
+def _sentences_from_timed_words(
+    *, words: list[dict[str, Any]], fallback_speaker: str, confidence: float | None
+) -> list[ProcessorSentence]:
+    grouped: list[list[dict[str, Any]]] = []
+    current: list[dict[str, Any]] = []
+    for word in words:
+        current.append(word)
+        token = str(word.get("word", "")).strip()
+        if token.endswith((".", "!", "?")):
+            grouped.append(current)
+            current = []
+    if current:
+        grouped.append(current)
+
+    rows: list[ProcessorSentence] = []
+    for group in grouped:
+        sentence_text = " ".join(str(word.get("word", "")).strip() for word in group).strip()
+        rows.extend(
+            _sentence_rows_from_words(
+                sentence_text=sentence_text,
+                sentence_start=float(group[0]["start"]),
+                sentence_end=float(group[-1]["end"]),
+                words=group,
+                fallback_speaker=fallback_speaker,
+                confidence=confidence,
+            )
+        )
+    return rows
 
 
 def _speaker_from_words(words: list[dict[str, Any]]) -> str | None:
@@ -541,6 +582,82 @@ def _speaker_for_sentence(words: list[dict[str, Any]] | None, fallback: str) -> 
         return max(durations, key=durations.get)
     first = _speaker_from_words(words)
     return first or fallback
+
+
+def _sentence_rows_from_words(
+    *,
+    sentence_text: str,
+    sentence_start: float,
+    sentence_end: float,
+    words: list[dict[str, Any]] | None,
+    fallback_speaker: str,
+    confidence: float | None,
+) -> list[ProcessorSentence]:
+    if not words:
+        return [
+            ProcessorSentence(
+                speaker_key=fallback_speaker,
+                start_time=sentence_start,
+                end_time=sentence_end,
+                text=sentence_text,
+                confidence=confidence,
+                words=None,
+            )
+        ]
+
+    runs: list[list[dict[str, Any]]] = []
+    current_run: list[dict[str, Any]] = []
+    current_speaker: str | None = None
+    for word in words:
+        speaker = str(word.get("speaker") or fallback_speaker)
+        if current_speaker is None or speaker == current_speaker:
+            current_run.append(word)
+            current_speaker = speaker
+            continue
+        runs.append(current_run)
+        current_run = [word]
+        current_speaker = speaker
+    if current_run:
+        runs.append(current_run)
+
+    if len(runs) == 1:
+        speaker = _speaker_for_sentence(words, fallback_speaker)
+        return [
+            ProcessorSentence(
+                speaker_key=speaker,
+                start_time=sentence_start,
+                end_time=sentence_end,
+                text=sentence_text,
+                confidence=confidence,
+                words=words,
+            )
+        ]
+
+    rows: list[ProcessorSentence] = []
+    for run in runs:
+        run_start = sentence_start
+        run_end = sentence_end
+        timed = [
+            word
+            for word in run
+            if isinstance(word.get("start"), int | float) and isinstance(word.get("end"), int | float)
+        ]
+        if timed:
+            run_start = float(timed[0]["start"])
+            run_end = float(timed[-1]["end"])
+        run_text = " ".join(str(word.get("word", "")).strip() for word in run).strip() or sentence_text
+        run_speaker = _speaker_for_sentence(run, fallback_speaker)
+        rows.append(
+            ProcessorSentence(
+                speaker_key=run_speaker,
+                start_time=run_start,
+                end_time=run_end,
+                text=run_text,
+                confidence=confidence,
+                words=run,
+            )
+        )
+    return rows
 
 
 def _segments_have_speaker_labels(segments: list[dict[str, Any]]) -> bool:
@@ -584,9 +701,6 @@ class DatabaseTranscriptWriter:
         self.connection = connection
 
     def persist(self, job_id: str, sentences: list[ProcessorSentence]) -> None:
-        if not sentences:
-            raise RuntimeError("Processor did not return transcript sentences")
-
         now = utc_now()
         speaker_keys = sorted({sentence.speaker_key or "SPEAKER_00" for sentence in sentences})
         speaker_ids = {speaker_key: str(uuid.uuid4()) for speaker_key in speaker_keys}
@@ -704,6 +818,9 @@ class FasterWhisperProcessor:
             result["segments"] = _assign_single_speaker(result.get("segments", []))
 
         segments = result.get("segments", [])
+        if not segments:
+            self.writer.persist(job_id, [])
+            return
         if not _segments_have_speaker_labels(segments):
             raise RuntimeError(
                 "Diarization did not produce speaker labels. Verify Hugging Face token and "

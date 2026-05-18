@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=69.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "whisperx-ui"
 version = "0.1.0"
@@ -25,6 +29,13 @@ test = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["backend"]
+
+[tool.setuptools]
+package-dir = {"" = "backend"}
+
+[tool.setuptools.packages.find]
+where = ["backend"]
+include = ["whisperx_ui_backend*"]
 
 [tool.ruff]
 line-length = 100

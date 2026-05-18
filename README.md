@@ -40,8 +40,10 @@ Set `VITE_API_BASE_URL` when the backend is not running on `http://127.0.0.1:800
 ## Tests
 
 ```bash
-uv run pytest
+./scripts/run-backend-tests.sh
 ```
+
+Note: first run needs internet access to install Python dependencies into `.venv`.
 
 Frontend tests are available when Node.js and npm are installed:
 
@@ -49,3 +51,47 @@ Frontend tests are available when Node.js and npm are installed:
 cd frontend
 npm test
 ```
+
+## Runtime Smoke Check
+
+Run a local runtime smoke validation (health, upload, model prep, job run, transcript fetch):
+
+```bash
+./scripts/smoke-check-local-runtime.sh
+```
+
+Optional token-enabled diarization check:
+
+```bash
+HF_TOKEN=hf_xxx ./scripts/smoke-check-local-runtime.sh
+```
+
+The script runs in-process via FastAPI `TestClient` (no local socket bind required).
+If the model-prep step fails, the script prints the backend response and exits with `[FAIL]`.
+For silent/near-silent audio, the smoke check accepts zero transcript sentences as long as the job completes and transcript endpoint returns a valid list payload.
+First run also needs internet access to install Python dependencies and download models.
+
+Backend behavior also treats silent-audio zero-segment transcription as a valid completed job with an empty transcript.
+
+## Diarization Benchmark
+
+Offline-friendly local fixtures:
+
+```bash
+./scripts/download-diarization-benchmark.sh
+./scripts/run-diarization-benchmark.sh
+```
+
+The benchmark reports simple proxy metrics: word-level speaker accuracy and speaker-change precision/recall.
+It enforces pass/fail thresholds (defaults: `MIN_WORD_SPEAKER_ACCURACY=0.80`, `MIN_SPEAKER_CHANGE_PRECISION=0.70`, `MIN_SPEAKER_CHANGE_RECALL=0.70`), overridable via environment variables.
+
+Opt-in real-audio evaluation:
+
+```bash
+# Auto-bootstrap from diarizers-community/voxconverse (default 1 case),
+# or set BOOTSTRAP_* env vars to customize source/split/count.
+./scripts/download-real-diarization-benchmark.sh
+HF_TOKEN=hf_xxx ./scripts/run-real-diarization-benchmark.sh
+```
+
+`run-real-diarization-benchmark.sh` uses the real pipeline path (transcription + diarization + assignment), computes word/sentence speaker accuracy proxies and speaker-change precision/recall after label mapping, and fails on threshold regressions.

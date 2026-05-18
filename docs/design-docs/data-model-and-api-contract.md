@@ -152,7 +152,8 @@ Current implementation notes:
 - Jobs use fixed engines: `transcription_engine: "faster-whisper"` and `diarization_engine: "huggingface-pyannote"`.
 - Request `settings` may carry transient runtime-only values such as `diarization_token` or `hf_token`; secret-like values are stripped from persisted `settings_json`.
 - If a diarization token is present, pyannote diarization runs and its output is normalized into timestamped speaker intervals. The parser accepts the pyannote community wrapper's `exclusive_speaker_diarization`, falls back to `speaker_diarization`, then to raw `itertracks` annotations or interval dictionaries.
-- Token-enabled speaker assignment first labels faster-whisper words by strongest diarization interval overlap, then assigns each persisted transcript sentence to the speaker with the strongest accumulated word duration. If no word assignment is available for a segment, segment-level interval overlap is used.
+- Token-enabled speaker assignment first labels faster-whisper words by strongest diarization interval overlap. Boundary ties keep the first matching diarization interval, and non-overlapping gaps fall back to the nearest interval so assignment remains deterministic.
+- Persistence preserves speaker changes inside faster-whisper sentence windows: when timed words in one sentence-sized window contain multiple speaker runs, the backend persists separate speaker-consistent sub-sentence rows rather than flattening the whole window to one speaker. If no word assignment is available for a segment, segment-level interval overlap is used.
 - If a diarization token is missing, the job still completes with single-speaker fallback labels (`SPEAKER_00`).
 
 ### Local Model APIs

@@ -208,8 +208,10 @@ tempCodeRunnerFile.py
 
 # WhisperX UI runtime data
 app_data/
+app_data*
 *.sqlite
 *.sqlite-journal
+benchmarks/real-audio/data/
 
 # Frontend dependencies and build outputs
 node_modules/
