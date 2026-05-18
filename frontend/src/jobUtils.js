@@ -1,8 +1,8 @@
 export const DEFAULT_JOB_SETTINGS = {
-  transcription_provider: "local",
-  transcription_model: "whisperx-small",
-  diarization_provider: "none",
-  diarization_model: "none",
+  transcription_engine: "faster-whisper",
+  transcription_model: "distil-large-v3",
+  diarization_engine: "huggingface-pyannote",
+  diarization_model: "pyannote/speaker-diarization-community-1",
   language: "",
   device: "auto",
   compute_type: "int8",
@@ -55,10 +55,11 @@ export function normalizeJobSettings(settings) {
     return Number(value);
   };
   return {
-    transcription_provider: settings.transcription_provider || "local",
-    transcription_model: settings.transcription_model || "whisperx-small",
-    diarization_provider: settings.diarization_provider || "none",
-    diarization_model: settings.diarization_model || "none",
+    transcription_engine: settings.transcription_engine || "faster-whisper",
+    transcription_model: settings.transcription_model || "distil-large-v3",
+    diarization_engine: settings.diarization_engine || "huggingface-pyannote",
+    diarization_model:
+      settings.diarization_model || "pyannote/speaker-diarization-community-1",
     language: settings.language || null,
     device: settings.device || "auto",
     compute_type: settings.compute_type || "int8",
@@ -72,7 +73,7 @@ export function normalizeJobSettings(settings) {
 export function buildModelPrepareRequest(settings) {
   const request = {
     profile: "basic",
-    transcription_model: settings.transcription_model || "whisperx-small",
+    transcription_model: settings.transcription_model || "distil-large-v3",
   };
   const hfToken = settings.diarization_token?.trim();
   if (hfToken) {

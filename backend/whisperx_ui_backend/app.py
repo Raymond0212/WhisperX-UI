@@ -149,6 +149,11 @@ def list_models(service: ModelService = Depends(model_service)):
     return service.list_models()
 
 
+@app.get("/api/model-options")
+def list_model_options(service: ModelService = Depends(model_service)):
+    return service.model_options()
+
+
 @app.post("/api/models/prepare-basic", response_model=ModelPrepareOut)
 def prepare_basic_models(
     request: ModelPrepareRequest,

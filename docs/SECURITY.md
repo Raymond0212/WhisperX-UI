@@ -6,22 +6,22 @@ WhisperX UI is a single-user local application. The default threat model is loca
 
 ## Local-First Defaults
 
-- The app must work without online API keys.
-- Local models are the default provider choice.
-- Online providers are opt-in and should be explicit in settings and job configuration.
+- The app must work without online API keys or Hugging Face tokens.
+- Local faster-whisper model files are the default transcription path.
+- Hugging Face pyannote diarization is opt-in through a transient token and should be explicit in job configuration.
 
-## API Keys
+## API Keys And Tokens
 
 - API key fields must be masked in the UI.
-- API keys must not be logged.
-- API keys should not be returned in plaintext API responses.
+- API keys and tokens must not be logged.
+- API keys and tokens should not be returned in plaintext API responses.
 - MVP default is not to persist API keys.
 - If persistence is implemented, keys must be encrypted in SQLite.
 - Electron packaging should later prefer OS keychain storage.
 
 Current implementation strips `online_api_keys` and key names containing `api_key`, `token`, or `secret` before persisting app settings or job settings. The settings API returns `online_api_keys` as an empty object.
 
-The basic model preparation API may receive a Hugging Face token for private or gated downloads. That token is passed only to the download call and is not returned in model status responses or persisted in app settings.
+The basic model preparation API may receive a Hugging Face token for private or gated downloads. That token is passed only to the download call and is not returned in model status responses or persisted in app settings. Job creation may also receive a transient diarization token in request `settings`; it enables pyannote diarization for that run and is stripped from persisted job settings.
 
 ## File Handling
 
@@ -35,6 +35,6 @@ Current upload handling sanitizes source filenames, prefixes stored filenames wi
 
 ## Logging
 
-- Do not log API keys or provider tokens.
+- Do not log API keys or Hugging Face tokens.
 - Avoid logging full local paths unless needed for local debugging.
 - Processing failures should store user-meaningful error messages without leaking secrets.

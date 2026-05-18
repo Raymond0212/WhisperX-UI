@@ -38,6 +38,11 @@ export function App() {
   const [settings, setSettings] = useState({});
   const [jobSettings, setJobSettings] = useState(DEFAULT_JOB_SETTINGS);
   const [localModels, setLocalModels] = useState([]);
+  const [modelOptions, setModelOptions] = useState({
+    transcription_models: [],
+    diarization_models: [],
+    defaults: {},
+  });
   const [selectedFile, setSelectedFile] = useState(null);
   const [isDraggingUpload, setIsDraggingUpload] = useState(false);
   const [viewMode, setViewMode] = useState("sentences");
@@ -49,6 +54,7 @@ export function App() {
     refreshLibrary();
     loadSettings();
     loadModels();
+    loadModelOptions();
   }, []);
 
   useEffect(() => {
@@ -75,6 +81,12 @@ export function App() {
 
   async function loadModels() {
     setLocalModels(await api("/api/models"));
+  }
+
+  async function loadModelOptions() {
+    const options = await api("/api/model-options");
+    setModelOptions(options);
+    setJobSettings((current) => mergeJobSettings({ ...options.defaults, ...current }));
   }
 
   async function selectAudio(audio) {
@@ -151,15 +163,13 @@ export function App() {
 
   async function processSelectedAudio() {
     if (!selectedAudio) return;
-    if (jobSettings.transcription_provider === "local") {
-      setMessage("Preparing local model...");
-      const prepared = await api("/api/models/prepare-basic", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildModelPrepareRequest(jobSettings)),
-      });
-      setLocalModels(prepared.models);
-    }
+    setMessage("Preparing local model...");
+    const prepared = await api("/api/models/prepare-basic", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildModelPrepareRequest(jobSettings)),
+    });
+    setLocalModels(prepared.models);
     setMessage("Processing audio...");
     const job = await api("/api/jobs", {
       method: "POST",
@@ -214,14 +224,14 @@ export function App() {
   }
 
   const speakerTurns = useMemo(() => groupSpeakerTurns(sentences), [sentences]);
-  const basicModel = localModels.find((model) => model.key === "whisperx-small");
+  const basicModel = localModels.find((model) => model.key === jobSettings.transcription_model);
 
   return (
     <main className="app-shell">
       <header className="topbar">
         <div>
           <h1>WhisperX UI</h1>
-          <p>Local uploads, placeholder processing, sentence review, speaker naming, and VTT export.</p>
+          <p>Local faster-whisper transcription with optional Hugging Face speaker diarization.</p>
         </div>
         <span className="status-pill">{message || "Ready"}</span>
       </header>
@@ -291,10 +301,10 @@ export function App() {
 
               <audio ref={audioRef} controls src={`${API_BASE}/api/audio/${selectedAudio.id}/stream`} />
 
-              <ModelConfig settings={jobSettings} onChange={updateJobSetting} />
+              <ModelConfig settings={jobSettings} onChange={updateJobSetting} modelOptions={modelOptions} />
               <div className="model-status">
                 <strong>{basicModel?.downloaded ? "Local model ready" : "Local model will download on process"}</strong>
-                <span>{basicModel?.display_name || "WhisperX small"}</span>
+                <span>{basicModel?.display_name || "Model will download on first run"}</span>
               </div>
 
               <div className="jobs-strip">
@@ -328,11 +338,7 @@ export function App() {
         <aside className="settings">
           <h2>Settings</h2>
           <form onSubmit={saveSettings} key={JSON.stringify(settings)}>
-            <SettingsFields settings={mergeJobSettings(settings)} />
-            <label>
-              Optional API key
-              <input name="online_api_key" type="password" placeholder="Not persisted in MVP" />
-            </label>
+            <SettingsFields settings={mergeJobSettings(settings)} modelOptions={modelOptions} />
             <button type="submit">
               <Save size={16} /> Save
             </button>
@@ -343,7 +349,7 @@ export function App() {
   );
 }
 
-function ProviderModelFields({ settings, onChange }) {
+function ProviderModelFields({ settings, onChange, modelOptions }) {
   const inputProps = (name) => ({
     name,
     value: settings[name] ?? "",
@@ -352,32 +358,36 @@ function ProviderModelFields({ settings, onChange }) {
   return (
     <>
       <label>
-        Transcription provider
-        <select {...inputProps("transcription_provider")}>
-          <option value="local">local</option>
-          <option value="placeholder">placeholder</option>
-          <option value="online">online</option>
-        </select>
+        Transcription engine
+        <input value="faster-whisper" readOnly />
       </label>
       <label>
         Transcription model
-        <input {...inputProps("transcription_model")} />
-      </label>
-      <label>
-        Diarization provider
-        <select {...inputProps("diarization_provider")}>
-          <option value="local">local</option>
-          <option value="online">online</option>
-          <option value="none">none</option>
+        <select {...inputProps("transcription_model")}>
+          {modelOptions.transcription_models.map((model) => (
+            <option value={model.id} key={model.id}>
+              {model.id}
+            </option>
+          ))}
         </select>
       </label>
       <label>
+        Diarization engine
+        <input value="huggingface-pyannote" readOnly />
+      </label>
+      <label>
         Diarization model
-        <input {...inputProps("diarization_model")} />
+        <select {...inputProps("diarization_model")}>
+          {modelOptions.diarization_models.map((model) => (
+            <option value={model.id} key={model.id}>
+              {model.id}
+            </option>
+          ))}
+        </select>
       </label>
       <label>
         Diarization/HF token
-        <input {...inputProps("diarization_token")} type="password" placeholder="Optional for this run" />
+        <input {...inputProps("diarization_token")} type="password" placeholder="Optional (enables pyannote diarization)" />
       </label>
     </>
   );
@@ -427,44 +437,48 @@ function RuntimeFields({ settings, onChange }) {
   );
 }
 
-function ModelConfig({ settings, onChange }) {
+function ModelConfig({ settings, onChange, modelOptions }) {
   return (
     <section className="model-config">
       <h2>Model Configuration</h2>
       <div className="model-grid">
-        <ProviderModelFields settings={settings} onChange={onChange} />
+        <ProviderModelFields settings={settings} onChange={onChange} modelOptions={modelOptions} />
         <RuntimeFields settings={settings} onChange={onChange} />
       </div>
     </section>
   );
 }
 
-function SettingsFields({ settings }) {
+function SettingsFields({ settings, modelOptions }) {
   return (
     <>
       <label>
-        Transcription provider
-        <select name="transcription_provider" defaultValue={settings.transcription_provider}>
-          <option value="local">local</option>
-          <option value="placeholder">placeholder</option>
-          <option value="online">online</option>
-        </select>
+        Transcription engine
+        <input name="transcription_engine" defaultValue={settings.transcription_engine} readOnly />
       </label>
       <label>
         Transcription model
-        <input name="transcription_model" defaultValue={settings.transcription_model} />
-      </label>
-      <label>
-        Diarization provider
-        <select name="diarization_provider" defaultValue={settings.diarization_provider}>
-          <option value="local">local</option>
-          <option value="online">online</option>
-          <option value="none">none</option>
+        <select name="transcription_model" defaultValue={settings.transcription_model}>
+          {modelOptions.transcription_models.map((model) => (
+            <option value={model.id} key={model.id}>
+              {model.id}
+            </option>
+          ))}
         </select>
       </label>
       <label>
+        Diarization engine
+        <input name="diarization_engine" defaultValue={settings.diarization_engine} readOnly />
+      </label>
+      <label>
         Diarization model
-        <input name="diarization_model" defaultValue={settings.diarization_model} />
+        <select name="diarization_model" defaultValue={settings.diarization_model}>
+          {modelOptions.diarization_models.map((model) => (
+            <option value={model.id} key={model.id}>
+              {model.id}
+            </option>
+          ))}
+        </select>
       </label>
       <label>
         Language

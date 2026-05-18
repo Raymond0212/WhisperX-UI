@@ -66,10 +66,10 @@ test("mergeJobSettings preserves defaults while normalizing empty optional field
 
 test("normalizeJobSettings converts form settings into backend request values", () => {
   assert.deepEqual(normalizeJobSettings({}), {
-    transcription_provider: "local",
-    transcription_model: "whisperx-small",
-    diarization_provider: "none",
-    diarization_model: "none",
+    transcription_engine: "faster-whisper",
+    transcription_model: "distil-large-v3",
+    diarization_engine: "huggingface-pyannote",
+    diarization_model: "pyannote/speaker-diarization-community-1",
     language: null,
     device: "auto",
     compute_type: "int8",
@@ -80,10 +80,10 @@ test("normalizeJobSettings converts form settings into backend request values", 
   });
   assert.deepEqual(
     normalizeJobSettings({
-      transcription_provider: "placeholder",
+      transcription_engine: "faster-whisper",
       transcription_model: "demo",
-      diarization_provider: "none",
-      diarization_model: "none",
+      diarization_engine: "huggingface-pyannote",
+      diarization_model: "pyannote/speaker-diarization-community-1",
       language: "en",
       device: "cpu",
       compute_type: "float32",
@@ -93,10 +93,10 @@ test("normalizeJobSettings converts form settings into backend request values", 
       max_speakers: "4",
     }),
     {
-      transcription_provider: "placeholder",
+      transcription_engine: "faster-whisper",
       transcription_model: "demo",
-      diarization_provider: "none",
-      diarization_model: "none",
+      diarization_engine: "huggingface-pyannote",
+      diarization_model: "pyannote/speaker-diarization-community-1",
       language: "en",
       device: "cpu",
       compute_type: "float32",
@@ -111,7 +111,7 @@ test("normalizeJobSettings converts form settings into backend request values", 
 test("buildModelPrepareRequest prepares the basic local model without persisting secrets", () => {
   assert.deepEqual(buildModelPrepareRequest({}), {
     profile: "basic",
-    transcription_model: "whisperx-small",
+    transcription_model: "distil-large-v3",
   });
   assert.deepEqual(
     buildModelPrepareRequest({
@@ -129,10 +129,10 @@ test("buildModelPrepareRequest prepares the basic local model without persisting
 test("buildJobRequest sends transient diarization token only when provided", () => {
   assert.deepEqual(buildJobRequest("audio-1", {}), {
     audio_file_id: "audio-1",
-    transcription_provider: "local",
-    transcription_model: "whisperx-small",
-    diarization_provider: "none",
-    diarization_model: "none",
+    transcription_engine: "faster-whisper",
+    transcription_model: "distil-large-v3",
+    diarization_engine: "huggingface-pyannote",
+    diarization_model: "pyannote/speaker-diarization-community-1",
     language: null,
     device: "auto",
     compute_type: "int8",
@@ -144,10 +144,10 @@ test("buildJobRequest sends transient diarization token only when provided", () 
 
   assert.deepEqual(buildJobRequest("audio-2", { diarization_token: "  hf-secret  " }), {
     audio_file_id: "audio-2",
-    transcription_provider: "local",
-    transcription_model: "whisperx-small",
-    diarization_provider: "none",
-    diarization_model: "none",
+    transcription_engine: "faster-whisper",
+    transcription_model: "distil-large-v3",
+    diarization_engine: "huggingface-pyannote",
+    diarization_model: "pyannote/speaker-diarization-community-1",
     language: null,
     device: "auto",
     compute_type: "int8",

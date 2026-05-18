@@ -2,7 +2,7 @@
 
 ## Local-First By Default
 
-The app should work on the user's machine without accounts, cloud sync, or online API keys. Local WhisperX and local diarization are the default path. Online providers are optional extensions and must not become required for the base workflow.
+The app should work on the user's machine without accounts, cloud sync, or online API keys. The base workflow uses local faster-whisper transcription and must complete without a Hugging Face token by falling back to a single speaker label (`SPEAKER_00`). Supplying a transient token enables Hugging Face pyannote diarization.
 
 ## Sentence Is The Canonical Transcript Unit
 
@@ -27,7 +27,7 @@ Users can edit transcript text, but the system should preserve original model ou
 
 Internal diarization labels such as `SPEAKER_00` should remain stable. User-facing display names such as `Alice` can change at any time and should update all views and exports globally.
 
-## Keep Provider Choices Explicit
+## Keep Engine Choices Explicit
 
 Every processing job should persist the model settings that produced it. A transcript should remain explainable later, even if defaults change.
 

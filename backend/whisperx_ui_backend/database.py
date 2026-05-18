@@ -43,9 +43,9 @@ def initialize_database(connection: sqlite3.Connection) -> None:
             id TEXT PRIMARY KEY,
             audio_file_id TEXT NOT NULL REFERENCES audio_files(id),
             status TEXT NOT NULL,
-            transcription_provider TEXT NOT NULL,
+            transcription_engine TEXT NOT NULL,
             transcription_model TEXT NOT NULL,
-            diarization_provider TEXT NOT NULL,
+            diarization_engine TEXT NOT NULL,
             diarization_model TEXT NOT NULL,
             language TEXT,
             device TEXT,
@@ -112,4 +112,3 @@ def initialize_database(connection: sqlite3.Connection) -> None:
         """
     )
     connection.commit()
-

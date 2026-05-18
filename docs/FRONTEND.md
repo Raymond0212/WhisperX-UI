@@ -10,7 +10,7 @@ The frontend is a React browser UI designed for local use and future Electron pa
 - Upload: file select or drag-and-drop, selected filename, title editing, model configuration, and one-click process.
 - Processing: simple waiting state and final success or failure result.
 - Transcript Review: audio player, speaker samples, speaker renaming, sentence view, speaker-turn view, transcript editing, sentence playback, and VTT export.
-- Settings: default transcription model, diarization model, local model paths, optional online provider API keys, and storage location if supported.
+- Settings: default transcription model, diarization model, and runtime defaults for local processing.
 
 Current implementation covers the core upload/library/workspace/settings flow with drag-and-drop upload, title editing, model config controls, one-click basic local model preparation, audio playback through the backend stream endpoint, sentence and speaker-turn review, speaker renaming, sentence edit-on-blur, and VTT export. It does not yet include all metadata display details such as duration or storage-location controls.
 
@@ -25,11 +25,10 @@ Current implementation covers the core upload/library/workspace/settings flow wi
 
 ## Form And State Expectations
 
-- Use local transcription as the default. The zero basic configuration path uses `diarization_provider: "none"` so the first run does not require a gated diarization token.
-- Before processing with the local provider, call the backend basic model preparation endpoint so the required Hugging Face model is downloaded into local app storage if missing.
-- Treat online provider settings as optional.
+- Use `transcription_engine: "faster-whisper"` and `diarization_engine: "huggingface-pyannote"` as fixed defaults.
+- The zero basic configuration path should complete without a token by falling back to single-speaker assignment (`SPEAKER_00`).
+- Before processing, call the backend basic model preparation endpoint so the required Hugging Face model is downloaded into local app storage if missing.
 - Treat Diarization/HF token input as transient per-job data. Send it only in job request `settings`; do not persist it as a saved default.
-- Mask API key inputs and avoid displaying secret values after save.
 - Use save-on-blur or short debounce autosave for transcript sentence edits.
 - Show failed job status and error messages in the UI.
 - Hide soft-deleted audio from the normal library view.

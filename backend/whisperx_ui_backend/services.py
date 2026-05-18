@@ -14,6 +14,21 @@ from fastapi import HTTPException, UploadFile
 
 from .config import SUPPORTED_AUDIO_EXTENSIONS, AppConfig
 from .database import transaction
+from .model_registry import (
+    DEFAULT_DIARIZATION_MODEL,
+    DEFAULT_TRANSCRIPTION_MODEL,
+    DIARIZATION_ENGINE,
+    DIARIZATION_MODEL_IDS,
+    TRANSCRIPTION_ENGINE,
+    TRANSCRIPTION_MODEL_IDS,
+    TRANSCRIPTION_MODELS,
+    model_options_payload,
+    validate_diarization_model,
+    validate_transcription_model,
+)
+from .processors.faster_whisper_processor import transcribe_with_faster_whisper
+from .processors.pyannote_diarization import diarize_with_pyannote
+from .processors.speaker_assignment import assign_speakers
 from .schemas import JobCreate, ModelPrepareRequest
 
 
@@ -58,13 +73,14 @@ SECRET_KEY_PARTS = ("api_key", "token", "secret")
 
 
 LOCAL_MODEL_DEFINITIONS: dict[str, dict[str, Any]] = {
-    "whisperx-small": {
-        "display_name": "WhisperX small",
-        "repo_id": "Systran/faster-whisper-small",
-        "local_dir_name": "Systran--faster-whisper-small",
-        "required_for_basic": True,
-        "notes": "Basic local transcription model for zero-config one-click processing.",
+    option.id: {
+        "display_name": option.label,
+        "repo_id": option.hf_repo_id,
+        "local_dir_name": option.hf_repo_id.replace("/", "--"),
+        "required_for_basic": option.id == DEFAULT_TRANSCRIPTION_MODEL,
+        "notes": "Faster-whisper model cache for local one-click processing.",
     }
+    for option in TRANSCRIPTION_MODELS
 }
 
 
@@ -129,11 +145,14 @@ class ModelService:
             for model_key in sorted(LOCAL_MODEL_DEFINITIONS)
         ]
 
+    def model_options(self) -> dict[str, object]:
+        return model_options_payload()
+
     def prepare_basic(self, request: ModelPrepareRequest) -> dict[str, Any]:
         if request.profile != "basic":
             raise HTTPException(status_code=400, detail="Only the basic model profile is supported")
 
-        model_key = request.transcription_model or "whisperx-small"
+        model_key = request.transcription_model or DEFAULT_TRANSCRIPTION_MODEL
         if model_key not in LOCAL_MODEL_DEFINITIONS:
             raise HTTPException(
                 status_code=400,
@@ -146,12 +165,15 @@ class ModelService:
             local_dir = local_model_path(self.config, model_key)
             assert local_dir is not None
             local_dir.mkdir(parents=True, exist_ok=True)
-            download_hf_snapshot(
-                repo_id=str(definition["repo_id"]),
-                local_dir=local_dir,
-                cache_dir=self.config.models_dir / ".hf-cache",
-                token=request.hf_token,
-            )
+            try:
+                download_hf_snapshot(
+                    repo_id=str(definition["repo_id"]),
+                    local_dir=local_dir,
+                    cache_dir=self.config.models_dir / ".hf-cache",
+                    token=request.hf_token,
+                )
+            except Exception as exc:
+                raise HTTPException(status_code=500, detail=str(exc)) from exc
             status = self._status_for_model(model_key)
 
         return {
@@ -318,35 +340,71 @@ class JobService:
         now = utc_now()
         settings = sanitize_persisted_settings(request.model_dump())
         with transaction(self.connection):
-            self.connection.execute(
-                """
-                INSERT INTO transcription_jobs (
-                    id, audio_file_id, status, transcription_provider, transcription_model,
-                    diarization_provider, diarization_model, language, device, compute_type,
-                    batch_size, speaker_count, min_speakers, max_speakers, settings_json,
-                    error_message, created_at, started_at, completed_at
+            job_columns = {
+                row["name"]
+                for row in self.connection.execute("PRAGMA table_info(transcription_jobs)").fetchall()
+            }
+            has_engine_columns = "transcription_engine" in job_columns
+            if has_engine_columns:
+                self.connection.execute(
+                    """
+                    INSERT INTO transcription_jobs (
+                        id, audio_file_id, status, transcription_engine, transcription_model,
+                        diarization_engine, diarization_model, language, device, compute_type,
+                        batch_size, speaker_count, min_speakers, max_speakers, settings_json,
+                        error_message, created_at, started_at, completed_at
+                    )
+                    VALUES (?, ?, 'processing', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL)
+                    """,
+                    (
+                        job_id,
+                        request.audio_file_id,
+                        request.transcription_engine,
+                        request.transcription_model,
+                        request.diarization_engine,
+                        request.diarization_model,
+                        request.language,
+                        request.device,
+                        request.compute_type,
+                        request.batch_size,
+                        request.speaker_count,
+                        request.min_speakers,
+                        request.max_speakers,
+                        json.dumps(settings, sort_keys=True),
+                        now,
+                        now,
+                    ),
                 )
-                VALUES (?, ?, 'processing', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL)
-                """,
-                (
-                    job_id,
-                    request.audio_file_id,
-                    request.transcription_provider,
-                    request.transcription_model,
-                    request.diarization_provider,
-                    request.diarization_model,
-                    request.language,
-                    request.device,
-                    request.compute_type,
-                    request.batch_size,
-                    request.speaker_count,
-                    request.min_speakers,
-                    request.max_speakers,
-                    json.dumps(settings, sort_keys=True),
-                    now,
-                    now,
-                ),
-            )
+            else:
+                self.connection.execute(
+                    """
+                    INSERT INTO transcription_jobs (
+                        id, audio_file_id, status, transcription_provider, transcription_model,
+                        diarization_provider, diarization_model, language, device, compute_type,
+                        batch_size, speaker_count, min_speakers, max_speakers, settings_json,
+                        error_message, created_at, started_at, completed_at
+                    )
+                    VALUES (?, ?, 'processing', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL)
+                    """,
+                    (
+                        job_id,
+                        request.audio_file_id,
+                        request.transcription_engine,
+                        request.transcription_model,
+                        request.diarization_engine,
+                        request.diarization_model,
+                        request.language,
+                        request.device,
+                        request.compute_type,
+                        request.batch_size,
+                        request.speaker_count,
+                        request.min_speakers,
+                        request.max_speakers,
+                        json.dumps(settings, sort_keys=True),
+                        now,
+                        now,
+                    ),
+                )
 
         try:
             create_processor(self.connection, self.config, dict(audio_row), request).run(job_id)
@@ -370,6 +428,10 @@ class JobService:
         if row is None:
             raise HTTPException(status_code=404, detail="Job not found")
         result = dict(row)
+        if "transcription_engine" not in result and "transcription_provider" in result:
+            result["transcription_engine"] = result["transcription_provider"]
+        if "diarization_engine" not in result and "diarization_provider" in result:
+            result["diarization_engine"] = result["diarization_provider"]
         result["settings"] = decode_json(result.pop("settings_json"), {})
         return result
 
@@ -381,6 +443,10 @@ class JobService:
         jobs = []
         for row in rows:
             job = dict(row)
+            if "transcription_engine" not in job and "transcription_provider" in job:
+                job["transcription_engine"] = job["transcription_provider"]
+            if "diarization_engine" not in job and "diarization_provider" in job:
+                job["diarization_engine"] = job["diarization_provider"]
             job["settings"] = decode_json(job.pop("settings_json"), {})
             jobs.append(job)
         return jobs
@@ -426,7 +492,7 @@ def segment_to_sentences(segment: dict[str, Any]) -> list[ProcessorSentence]:
     duration = max(end_time - start_time, 0.0)
     text_length = max(len(normalized_text), 1)
     segment_words = segment.get("words") or []
-    speaker_key = segment.get("speaker") or _speaker_from_words(segment_words) or "SPEAKER_00"
+    segment_speaker = segment.get("speaker") or _speaker_from_words(segment_words) or "SPEAKER_00"
 
     sentences: list[ProcessorSentence] = []
     for start_index, end_index, sentence_text in matches:
@@ -435,9 +501,10 @@ def segment_to_sentences(segment: dict[str, Any]) -> list[ProcessorSentence]:
         if sentence_end <= sentence_start:
             sentence_end = end_time
         words = _words_for_sentence(segment_words, sentence_start, sentence_end, sentence_text)
+        sentence_speaker = _speaker_for_sentence(words, segment_speaker)
         sentences.append(
             ProcessorSentence(
-                speaker_key=speaker_key,
+                speaker_key=sentence_speaker,
                 start_time=sentence_start,
                 end_time=sentence_end,
                 text=sentence_text,
@@ -454,6 +521,26 @@ def _speaker_from_words(words: list[dict[str, Any]]) -> str | None:
         if speaker:
             return str(speaker)
     return None
+
+
+def _speaker_for_sentence(words: list[dict[str, Any]] | None, fallback: str) -> str:
+    if not words:
+        return fallback
+    durations: dict[str, float] = {}
+    for word in words:
+        speaker = word.get("speaker")
+        if not speaker:
+            continue
+        start = word.get("start")
+        end = word.get("end")
+        duration = 0.0
+        if isinstance(start, int | float) and isinstance(end, int | float):
+            duration = max(0.0, float(end) - float(start))
+        durations[str(speaker)] = durations.get(str(speaker), 0.0) + duration
+    if durations:
+        return max(durations, key=durations.get)
+    first = _speaker_from_words(words)
+    return first or fallback
 
 
 def _segments_have_speaker_labels(segments: list[dict[str, Any]]) -> bool:
@@ -570,109 +657,57 @@ class DatabaseTranscriptWriter:
             )
 
 
-class PlaceholderProcessor:
-    def __init__(self, connection: sqlite3.Connection) -> None:
-        self.writer = DatabaseTranscriptWriter(connection)
-
-    def run(self, job_id: str) -> None:
-        self.writer.persist(
-            job_id,
-            [
-                ProcessorSentence(
-                    "SPEAKER_00", 0.0, 4.8, "This is a placeholder transcript sentence."
-                ),
-                ProcessorSentence(
-                    "SPEAKER_01", 5.2, 9.6, "It lets you test editing and speaker labels."
-                ),
-                ProcessorSentence(
-                    "SPEAKER_00", 10.0, 15.0, "Replace this processor with WhisperX when ready."
-                ),
-            ],
-        )
-
-
-class WhisperXProcessor:
+class FasterWhisperProcessor:
     def __init__(
         self,
         connection: sqlite3.Connection,
         audio: dict[str, Any],
         request: JobCreate,
-        whisperx_module: Any,
         config: AppConfig,
     ) -> None:
         self.writer = DatabaseTranscriptWriter(connection)
         self.audio = audio
         self.request = request
-        self.whisperx = whisperx_module
         self.config = config
 
     def run(self, job_id: str) -> None:
         audio_path = self.audio["file_path"]
-        device = "cpu" if self.request.device == "auto" else self.request.device
-        transcription_model = resolve_transcription_model_reference(
-            self.config,
-            self.request.transcription_model,
+        transcription_model = validate_transcription_model(
+            self.request.transcription_model or DEFAULT_TRANSCRIPTION_MODEL
         )
-        model = self.whisperx.load_model(
-            transcription_model,
-            device=device,
+        result = transcribe_with_faster_whisper(
+            audio_path=audio_path,
+            model_id=resolve_transcription_model_reference(self.config, transcription_model),
+            device=self.request.device,
             compute_type=self.request.compute_type,
             language=self.request.language,
-        )
-        result = model.transcribe(
-            audio_path,
-            batch_size=self.request.batch_size,
-            language=self.request.language,
+            download_root=str(self.config.models_dir),
         )
 
-        if hasattr(self.whisperx, "load_align_model") and result.get("segments"):
-            align_model, metadata = self.whisperx.load_align_model(
-                language_code=result.get("language") or self.request.language or "en",
-                device=device,
+        diarization_token = self.request.settings.get("diarization_token") or self.request.settings.get(
+            "hf_token"
+        )
+        if diarization_token:
+            diarization_model = validate_diarization_model(
+                self.request.diarization_model or DEFAULT_DIARIZATION_MODEL
             )
-            result = self.whisperx.align(
-                result["segments"],
-                align_model,
-                metadata,
-                audio_path,
-                device,
-                return_char_alignments=False,
+            speaker_segments = diarize_with_pyannote(
+                audio_path=audio_path,
+                model_id=diarization_model,
+                hf_token=diarization_token,
+                speaker_count=self.request.speaker_count,
+                min_speakers=self.request.min_speakers,
+                max_speakers=self.request.max_speakers,
             )
-
-        speaker_segments = None
-        diarization_enabled = self.request.diarization_provider != "none"
-        diarization_token = self.request.settings.get(
-            "diarization_token"
-        ) or self.request.settings.get("hf_token")
-        if (
-            diarization_enabled
-            and diarization_token
-            and hasattr(self.whisperx, "DiarizationPipeline")
-        ):
-            diarize = self.whisperx.DiarizationPipeline(
-                use_auth_token=diarization_token,
-                device=device,
-            )
-            diarize_kwargs = {
-                key: value
-                for key, value in {
-                    "num_speakers": self.request.speaker_count,
-                    "min_speakers": self.request.min_speakers,
-                    "max_speakers": self.request.max_speakers,
-                }.items()
-                if value is not None
-            }
-            speaker_segments = diarize(audio_path, **diarize_kwargs)
-
-        if speaker_segments is not None and hasattr(self.whisperx, "assign_word_speakers"):
-            result = self.whisperx.assign_word_speakers(speaker_segments, result)
+            result["segments"] = assign_speakers(result.get("segments", []), speaker_segments)
+        else:
+            result["segments"] = _assign_single_speaker(result.get("segments", []))
 
         segments = result.get("segments", [])
-        if diarization_enabled and not _segments_have_speaker_labels(segments):
+        if not _segments_have_speaker_labels(segments):
             raise RuntimeError(
-                "Diarization did not produce speaker labels. Configure a working local diarization "
-                "pipeline/token, provide speaker-labeled WhisperX output, or set "
-                'diarization_provider "none".'
+                "Diarization did not produce speaker labels. Verify Hugging Face token and "
+                "pyannote model access."
             )
 
         sentences = [
@@ -683,23 +718,22 @@ class WhisperXProcessor:
         self.writer.persist(job_id, sentences)
 
 
-def import_whisperx() -> Any:
-    try:
-        import whisperx  # type: ignore[import-not-found]
-    except ImportError as exc:
-        raise RuntimeError(
-            "WhisperX is not installed or could not be imported. Install WhisperX or choose "
-            'transcription_provider "placeholder" for demo output.'
-        ) from exc
-    return whisperx
+def _assign_single_speaker(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    for segment in segments:
+        segment["speaker"] = segment.get("speaker") or "SPEAKER_00"
+        for word in segment.get("words") or []:
+            word["speaker"] = word.get("speaker") or "SPEAKER_00"
+    return segments
 
 
 def create_processor(
     connection: sqlite3.Connection, config: AppConfig, audio: dict[str, Any], request: JobCreate
 ) -> TranscriptProcessor:
-    if request.transcription_provider == "placeholder":
-        return PlaceholderProcessor(connection)
-    return WhisperXProcessor(connection, audio, request, import_whisperx(), config)
+    if request.transcription_engine != TRANSCRIPTION_ENGINE:
+        raise RuntimeError(f'Unsupported transcription_engine "{request.transcription_engine}"')
+    if request.diarization_engine != DIARIZATION_ENGINE:
+        raise RuntimeError(f'Unsupported diarization_engine "{request.diarization_engine}"')
+    return FasterWhisperProcessor(connection, audio, request, config)
 
 
 class TranscriptService:
@@ -780,10 +814,10 @@ class SpeakerService:
 
 class SettingsService:
     DEFAULTS = {
-        "transcription_provider": "local",
-        "transcription_model": "whisperx-small",
-        "diarization_provider": "none",
-        "diarization_model": "none",
+        "transcription_engine": TRANSCRIPTION_ENGINE,
+        "transcription_model": DEFAULT_TRANSCRIPTION_MODEL,
+        "diarization_engine": DIARIZATION_ENGINE,
+        "diarization_model": DEFAULT_DIARIZATION_MODEL,
         "language": None,
         "device": "auto",
         "compute_type": "int8",
@@ -792,7 +826,6 @@ class SettingsService:
         "min_speakers": None,
         "max_speakers": None,
         "local_models_path": "app_data/models",
-        "online_api_keys": {},
     }
 
     def __init__(self, connection: sqlite3.Connection) -> None:
@@ -803,6 +836,7 @@ class SettingsService:
         rows = self.connection.execute("SELECT key, value_json FROM app_settings").fetchall()
         for row in rows:
             settings[row["key"]] = decode_json(row["value_json"], None)
+        settings = self._sanitize_loaded_settings(settings)
         return self._redact(settings)
 
     def update_settings(self, updates: dict[str, Any]) -> dict[str, Any]:
@@ -823,9 +857,23 @@ class SettingsService:
         return self.get_settings()
 
     def _redact(self, settings: dict[str, Any]) -> dict[str, Any]:
-        copy = dict(settings)
-        copy["online_api_keys"] = {}
-        return copy
+        return dict(settings)
+
+    def _sanitize_loaded_settings(self, settings: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(settings)
+        if normalized.get("transcription_engine") != TRANSCRIPTION_ENGINE:
+            normalized["transcription_engine"] = TRANSCRIPTION_ENGINE
+        if normalized.get("diarization_engine") != DIARIZATION_ENGINE:
+            normalized["diarization_engine"] = DIARIZATION_ENGINE
+
+        transcription_model = normalized.get("transcription_model")
+        if transcription_model not in TRANSCRIPTION_MODEL_IDS:
+            normalized["transcription_model"] = DEFAULT_TRANSCRIPTION_MODEL
+
+        diarization_model = normalized.get("diarization_model")
+        if diarization_model not in DIARIZATION_MODEL_IDS:
+            normalized["diarization_model"] = DEFAULT_DIARIZATION_MODEL
+        return normalized
 
 
 class VttService:

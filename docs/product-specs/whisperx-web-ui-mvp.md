@@ -2,7 +2,7 @@
 
 ## Product Summary
 
-WhisperX UI is a single-user, local-first desktop-style web application for WhisperX. A user can upload audio, configure transcription and diarization, run one-click processing, review a sentence-level transcript with speaker labels, edit transcript text, rename speakers, play audio from transcript sentences, and persist data locally using SQLite.
+WhisperX UI is a single-user, local-first desktop-style web application for faster-whisper transcription with optional Hugging Face pyannote diarization. A user can upload audio, configure transcription and diarization, run one-click processing, review a sentence-level transcript with speaker labels, edit transcript text, rename speakers, play audio from transcript sentences, and persist data locally using SQLite.
 
 The frontend is React. The backend is Python. The app is initially a local web app and should remain suitable for future Electron packaging.
 
@@ -13,7 +13,7 @@ The frontend is React. The backend is Python. The app is initially a local web a
 - Run locally by default without requiring API keys.
 - Persist user data in SQLite and retained files on local disk.
 - Support transcript review, text editing, speaker renaming, and timestamped playback.
-- Support configurable local and optional online transcription/diarization providers.
+- Support configurable engine/model settings for faster-whisper transcription and Hugging Face pyannote diarization.
 
 ## Non-Goals
 
@@ -83,10 +83,9 @@ Initial supported audio extensions: `.mp3`, `.wav`, `.m4a`, `.flac`, `.ogg`, `.a
 Expected local processing pipeline:
 
 ```text
-WhisperX transcription
--> alignment
+faster-whisper transcription
 -> sentence chunking
--> diarization
+-> optional Hugging Face pyannote diarization when a token is supplied
 -> speaker assignment
 -> VTT-compatible transcript generation
 ```
@@ -96,7 +95,7 @@ WhisperX transcription
 | ID | Requirement |
 | --- | --- |
 | SP-001 | App supports speaker diarization. |
-| SP-002 | Default diarization uses local models where possible. |
+| SP-002 | Hugging Face pyannote diarization is enabled when the user supplies a transient token. |
 | SP-003 | App assigns speaker labels to transcript sentences. |
 | SP-004 | Initial labels may use names such as `SPEAKER_00`. |
 | SP-005 | User can rename each detected speaker. |
@@ -105,6 +104,7 @@ WhisperX transcription
 | SP-008 | App provides a speaker sample section after diarization. |
 | SP-009 | User can play a sample audio clip for each detected speaker. |
 | SP-010 | Speaker samples help users identify and rename speakers quickly. |
+| SP-011 | If no Hugging Face token is supplied, processing still completes by assigning `SPEAKER_00`. |
 
 Speaker identity uses stable internal keys and editable display names:
 
@@ -182,21 +182,21 @@ MVP save behavior should use save-on-blur or short debounce autosave.
 | MC-001 | User can configure transcription model before processing. |
 | MC-002 | User can configure diarization model before processing. |
 | MC-003 | Default models are local. |
-| MC-004 | Online models are optional. |
-| MC-005 | User can provide API keys for online models. |
+| MC-004 | Hugging Face pyannote diarization is optional for the zero-basic-config path. |
+| MC-005 | User can provide a transient Hugging Face token for model download or pyannote diarization. |
 | MC-006 | Model settings used for a job are persisted. |
 | MC-007 | Different uploads or jobs may use different model settings. |
 | MC-008 | The basic local transcription model can be downloaded automatically before first local processing. |
 
-Transcription settings may include provider, model, language, device, compute type, batch size, and alignment model. Diarization settings may include provider, model, speaker count, min speakers, max speakers, device, and token/API key when required.
+Transcription settings include `transcription_engine`, `transcription_model`, language, device, compute type, and batch size. Diarization settings include `diarization_engine`, `diarization_model`, speaker count, min speakers, max speakers, and a runtime-only token when pyannote diarization is enabled.
 
 ### API Keys
 
 | ID | Requirement |
 | --- | --- |
-| AK-001 | User can provide API keys for online providers. |
+| AK-001 | User can provide a Hugging Face token for model download or pyannote diarization. |
 | AK-002 | API keys are optional. |
-| AK-003 | App works without online API keys by using local models. |
+| AK-003 | App works without tokens by using local faster-whisper transcription and single-speaker fallback. |
 | AK-004 | API keys are masked in the UI. |
 | AK-005 | API keys are not logged. |
 | AK-006 | User can remove saved API keys. |
@@ -206,7 +206,7 @@ MVP default: do not persist API keys unless encrypted storage is deliberately im
 
 ### Persistence
 
-SQLite stores audio metadata, jobs, speakers, transcript sentences, app settings, and optional provider credentials. Filesystem storage retains uploaded audio and generated artifacts.
+SQLite stores audio metadata, jobs, speakers, transcript sentences, and app settings. Filesystem storage retains uploaded audio, downloaded model files, and generated artifacts.
 
 Recommended layout:
 
@@ -293,7 +293,7 @@ Recommended stored filename format:
 | Upload | Support file select or drag-and-drop, title editing, model configuration, and one-click process. |
 | Processing | Show simple processing state, final result, or failure error. |
 | Transcript Review | Show audio player, speaker labeling, speaker samples, sentence view, speaker-turn view, sentence playback, editing, and VTT export. |
-| Settings | Configure default transcription model, diarization model, local model paths, online API keys, and storage location if supported. |
+| Settings | Configure default transcription model, diarization model, runtime defaults, local model paths, and storage location if supported. |
 
 ## Product Decisions
 
@@ -303,8 +303,8 @@ Recommended stored filename format:
 - Frontend: React.
 - Backend: Python.
 - Database: SQLite.
-- Default processing: local models.
-- Online models: optional.
+- Default processing: faster-whisper with downloaded local model files.
+- Hugging Face pyannote diarization: optional through a transient token.
 - Progress UI: simple processing state.
 - Audio retention: retained by default.
 - Duplicate uploads: allowed and auto-renamed.

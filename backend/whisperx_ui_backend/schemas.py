@@ -27,10 +27,10 @@ class AudioUpdate(BaseModel):
 
 class JobCreate(BaseModel):
     audio_file_id: str
-    transcription_provider: str = "local"
-    transcription_model: str = "whisperx-small"
-    diarization_provider: str = "none"
-    diarization_model: str = "none"
+    transcription_engine: str = "faster-whisper"
+    transcription_model: str = "distil-large-v3"
+    diarization_engine: str = "huggingface-pyannote"
+    diarization_model: str = "pyannote/speaker-diarization-community-1"
     language: str | None = None
     device: str = "auto"
     compute_type: str = "int8"
@@ -45,9 +45,9 @@ class JobOut(BaseModel):
     id: str
     audio_file_id: str
     status: JobStatus
-    transcription_provider: str
+    transcription_engine: str
     transcription_model: str
-    diarization_provider: str
+    diarization_engine: str
     diarization_model: str
     language: str | None = None
     device: str | None = None
@@ -117,7 +117,7 @@ class LocalModelOut(BaseModel):
 
 class ModelPrepareRequest(BaseModel):
     profile: str = "basic"
-    transcription_model: str = "whisperx-small"
+    transcription_model: str = "distil-large-v3"
     hf_token: str | None = None
 
 

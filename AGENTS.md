@@ -2,7 +2,7 @@
 
 ## Overview
 
-WhisperX UI is planned as a single-user, local-first desktop-style web application for uploading audio, running WhisperX transcription and diarization, reviewing sentence-level transcripts, editing text, renaming speakers, playing timestamped audio, and exporting VTT.
+WhisperX UI is planned as a single-user, local-first desktop-style web application for uploading audio, running faster-whisper transcription and optional Hugging Face pyannote diarization, reviewing sentence-level transcripts, editing text, renaming speakers, playing timestamped audio, and exporting VTT.
 
 The implementation target is:
 
@@ -16,7 +16,7 @@ The implementation target is:
 - [ARCHITECTURE.md](ARCHITECTURE.md): top-level system architecture, subsystem boundaries, and dependency direction.
 - [docs/product-specs/index.md](docs/product-specs/index.md): product behavior and MVP requirements.
 - [docs/design-docs/index.md](docs/design-docs/index.md): design decisions, rationale, and implementation constraints.
-- [docs/exec-plans/active/initial-mvp-implementation.md](docs/exec-plans/active/initial-mvp-implementation.md): active implementation plan for the first MVP build.
+- [docs/exec-plans/active/phase-2-refactor-fast-whisper-pyannote.md](docs/exec-plans/active/phase-2-refactor-fast-whisper-pyannote.md): active phase-2 refactor plan.
 - [docs/FRONTEND.md](docs/FRONTEND.md): frontend conventions and interaction expectations.
 - [docs/SECURITY.md](docs/SECURITY.md): local-first security and credential handling guidance.
 - [docs/RELIABILITY.md](docs/RELIABILITY.md): job, storage, deletion, and error-handling expectations.

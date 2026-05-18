@@ -30,9 +30,9 @@ Represents one processing run for an audio file.
 | `id` | Unique job ID. |
 | `audio_file_id` | Related audio file. |
 | `status` | Job state. |
-| `transcription_provider` | Provider used. |
+| `transcription_engine` | Engine used. |
 | `transcription_model` | Model used. |
-| `diarization_provider` | Provider used. |
+| `diarization_engine` | Engine used. |
 | `diarization_model` | Model used. |
 | `language` | Language config. |
 | `device` | CPU, CUDA, or auto. |
@@ -101,20 +101,7 @@ Stores preferences and default model choices.
 | `value_json` | Serialized setting value. |
 | `updated_at` | Last update timestamp. |
 
-### Provider Credential
-
-Optional storage for online provider credentials.
-
-| Field | Purpose |
-| --- | --- |
-| `id` | Credential ID. |
-| `provider` | Provider name. |
-| `display_name` | Optional user-facing label. |
-| `encrypted_api_key` | Encrypted API key. |
-| `created_at` | Creation timestamp. |
-| `updated_at` | Last update timestamp. |
-
-MVP default is no API key persistence unless encrypted storage is deliberately implemented. The current implementation creates the credential table but does not expose credential APIs; settings persistence strips secret-like keys and returns `online_api_keys` as an empty object.
+Credential persistence APIs are not part of the current phase-2 path.
 
 ## API Contract
 
@@ -162,12 +149,11 @@ Responsibilities:
 
 Current implementation notes:
 
-- `transcription_provider: "placeholder"` produces deterministic demo transcript rows.
-- Other providers currently use the local WhisperX path, which imports WhisperX at runtime and fails the job clearly if unavailable.
-- Request `settings` may carry transient runtime-only values such as `diarization_token` or `hf_token`; secret-like values are used for the current job when needed but stripped from persisted `settings_json`.
-- When diarization is enabled, the WhisperX path fails the job if the final segments do not contain speaker labels.
-- `diarization_provider: "none"` disables diarization pipeline setup and allows speakerless WhisperX output to persist under the fallback `SPEAKER_00`, even if a transient token is present.
-- The tested WhisperX path chunks returned segments into sentence records and covers fake alignment and diarization assignment. Real WhisperX, pyannote, model loading, and hardware execution still need validation outside the fake module tests.
+- Jobs use fixed engines: `transcription_engine: "faster-whisper"` and `diarization_engine: "huggingface-pyannote"`.
+- Request `settings` may carry transient runtime-only values such as `diarization_token` or `hf_token`; secret-like values are stripped from persisted `settings_json`.
+- If a diarization token is present, pyannote diarization runs and its output is normalized into timestamped speaker intervals. The parser accepts the pyannote community wrapper's `exclusive_speaker_diarization`, falls back to `speaker_diarization`, then to raw `itertracks` annotations or interval dictionaries.
+- Token-enabled speaker assignment first labels faster-whisper words by strongest diarization interval overlap, then assigns each persisted transcript sentence to the speaker with the strongest accumulated word duration. If no word assignment is available for a segment, segment-level interval overlap is used.
+- If a diarization token is missing, the job still completes with single-speaker fallback labels (`SPEAKER_00`).
 
 ### Local Model APIs
 
@@ -184,10 +170,10 @@ Responsibilities:
 
 Current implementation notes:
 
-- The basic profile downloads `Systran/faster-whisper-small` into `app_data/models/Systran--faster-whisper-small`.
+- The basic profile downloads `Systran/faster-distil-whisper-large-v3` into `app_data/models/Systran--faster-distil-whisper-large-v3`.
 - Download uses `huggingface_hub.snapshot_download` with a repository-local Hugging Face cache under `app_data/models/.hf-cache`.
-- When the local model directory exists, the WhisperX processor passes the local directory path to `whisperx.load_model`; otherwise it falls back to the configured model key.
-- The zero basic configuration path defaults diarization to `"none"` so users can run first local transcription without a gated diarization model or token.
+- When the local model directory exists, the faster-whisper processor uses the local directory path; otherwise it falls back to model ID.
+- The zero basic configuration path runs without token and still completes via single-speaker fallback. Supplying token enables pyannote diarization.
 
 ### Transcript APIs
 

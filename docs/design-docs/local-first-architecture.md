@@ -8,7 +8,7 @@ The app runs as a local web application:
 React frontend in browser
 -> local Python API server
 -> SQLite and local filesystem
--> local WhisperX and diarization providers
+-> faster-whisper and optional Hugging Face pyannote processors
 ```
 
 The initial user entry point is `http://localhost:<port>`. Electron packaging should later wrap the same UI and launch or supervise the Python backend.
@@ -42,15 +42,14 @@ The local pipeline is:
 
 ```text
 transcription
--> alignment
 -> sentence chunking
--> diarization
+-> optional diarization when a Hugging Face token is supplied
 -> speaker assignment
 -> speaker sample selection
 -> persistence
 ```
 
-Provider-specific implementations should sit behind service boundaries so local and online providers can share the same job, transcript, speaker, and export contracts.
+Processor-specific implementations should sit behind service boundaries so engine/model details share the same job, transcript, speaker, and export contracts. The zero basic configuration path still completes without a token by assigning `SPEAKER_00`.
 
 ## Speaker Samples
 

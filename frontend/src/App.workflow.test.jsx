@@ -28,13 +28,13 @@ function createApiMock() {
   const completedJob = {
     id: "job-complete",
     status: "completed",
-    transcription_model: "whisperx-small",
+    transcription_model: "distil-large-v3",
     error_message: null,
   };
   const failedJob = {
     id: "job-failed",
     status: "failed",
-    transcription_model: "whisperx-small",
+    transcription_model: "distil-large-v3",
     error_message: "Model crashed",
   };
   const uploadedJobs = [];
@@ -71,10 +71,10 @@ function createApiMock() {
 
     if (method === "GET" && path === "/api/settings") {
       return jsonResponse({
-        transcription_provider: "local",
-        transcription_model: "whisperx-small",
-        diarization_provider: "none",
-        diarization_model: "none",
+        transcription_engine: "faster-whisper",
+        transcription_model: "distil-large-v3",
+        diarization_engine: "huggingface-pyannote",
+        diarization_model: "pyannote/speaker-diarization-community-1",
         batch_size: 8,
       });
     }
@@ -82,14 +82,35 @@ function createApiMock() {
     if (method === "GET" && path === "/api/models") {
       return jsonResponse([
         {
-          key: "whisperx-small",
-          display_name: "WhisperX small",
-          repo_id: "Systran/faster-whisper-small",
-          local_path: "/tmp/app_data/models/Systran--faster-whisper-small",
+          key: "distil-large-v3",
+          display_name: "Distil Large v3",
+          repo_id: "Systran/faster-distil-whisper-large-v3",
+          local_path: "/tmp/app_data/models/Systran--faster-distil-whisper-large-v3",
           downloaded: false,
           required_for_basic: true,
         },
       ]);
+    }
+    if (method === "GET" && path === "/api/model-options") {
+      return jsonResponse({
+        transcription_models: [{ id: "distil-large-v3", label: "Distil Large v3" }],
+        diarization_models: [
+          {
+            id: "pyannote/speaker-diarization-community-1",
+            label: "Pyannote Speaker Diarization Community-1",
+            requires_token: true,
+          },
+        ],
+        defaults: {
+          transcription_engine: "faster-whisper",
+          transcription_model: "distil-large-v3",
+          diarization_engine: "huggingface-pyannote",
+          diarization_model: "pyannote/speaker-diarization-community-1",
+          device: "auto",
+          compute_type: "int8",
+          batch_size: 8,
+        },
+      });
     }
 
     if (method === "POST" && path === "/api/audio") {
@@ -117,10 +138,10 @@ function createApiMock() {
         ready: true,
         models: [
           {
-            key: "whisperx-small",
-            display_name: "WhisperX small",
-            repo_id: "Systran/faster-whisper-small",
-            local_path: "/tmp/app_data/models/Systran--faster-whisper-small",
+            key: "distil-large-v3",
+            display_name: "Distil Large v3",
+            repo_id: "Systran/faster-distil-whisper-large-v3",
+            local_path: "/tmp/app_data/models/Systran--faster-distil-whisper-large-v3",
             downloaded: true,
             required_for_basic: true,
           },
@@ -192,7 +213,7 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   render(<App />);
 
   expect(await screen.findByText("Broken clip")).not.toBeNull();
-  expect(screen.getByDisplayValue("whisperx-small")).not.toBeNull();
+  expect(screen.getByDisplayValue("distil-large-v3")).not.toBeNull();
 
   const file = new File(["demo audio"], "meeting.wav", { type: "audio/wav" });
   fireEvent.change(screen.getByLabelText("Audio file"), { target: { files: [file] } });
@@ -217,16 +238,16 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   );
   expect(JSON.parse(modelRequest.options.body)).toEqual({
     profile: "basic",
-    transcription_model: "whisperx-small",
+    transcription_model: "distil-large-v3",
     hf_token: "hf-secret",
   });
   const jobRequest = requests.find((request) => request.method === "POST" && request.path === "/api/jobs");
   expect(JSON.parse(jobRequest.options.body)).toMatchObject({
     audio_file_id: "audio-uploaded",
-    transcription_provider: "local",
-    transcription_model: "whisperx-small",
-    diarization_provider: "none",
-    diarization_model: "none",
+    transcription_engine: "faster-whisper",
+    transcription_model: "distil-large-v3",
+    diarization_engine: "huggingface-pyannote",
+    diarization_model: "pyannote/speaker-diarization-community-1",
     settings: { diarization_token: "hf-secret" },
   });
   expect(screen.getByText("Local model ready")).not.toBeNull();
@@ -287,7 +308,7 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
 
   const failedRow = screen.getByRole("button", { name: /broken clipfailed/i });
   fireEvent.click(failedRow);
-  const failedJobButton = await screen.findByRole("button", { name: /failed .* whisperx-small/i });
+  const failedJobButton = await screen.findByRole("button", { name: /failed .* distil-large-v3/i });
   fireEvent.click(failedJobButton);
   expect(await screen.findByText("Model crashed")).not.toBeNull();
 

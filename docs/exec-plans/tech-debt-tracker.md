@@ -15,4 +15,4 @@ This file tracks known deferred work and maintenance liabilities. Items should s
 | Batch uploads | Deferred | Single-file upload first. |
 | Extra export formats | Deferred | VTT export first; TXT, JSON, SRT, CSV, DOCX later. |
 | OS keychain integration | Deferred | Relevant when Electron packaging begins. |
-| Real WhisperX runtime verification | Open | Tests cover the provider boundary with a fake WhisperX module and local model path resolution; real model loading, alignment, diarization, and hardware behavior still need environment validation. |
+| Real faster-whisper and pyannote runtime verification | Open | Tests cover model registry, local model preparation, request construction, fallback speaker assignment, and processor boundaries with fakes; real model loading, Hugging Face downloads, diarization model access, and hardware behavior still need environment validation. |

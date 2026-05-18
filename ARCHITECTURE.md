@@ -2,13 +2,13 @@
 
 ## System Shape
 
-WhisperX UI is a local-first web application with a React frontend and Python backend. The backend runs on the user's machine, stores metadata in SQLite, stores files on the local filesystem, and coordinates WhisperX transcription, alignment, sentence chunking, diarization, speaker assignment, speaker samples, and VTT export.
+WhisperX UI is a local-first web application with a React frontend and Python backend. The backend runs on the user's machine, stores metadata in SQLite, stores files on the local filesystem, and coordinates faster-whisper transcription, optional Hugging Face pyannote diarization, speaker assignment, speaker samples, and VTT export.
 
 ```text
 React Frontend
     -> Python API Backend
     -> Application Services
-    -> WhisperX / Diarization Providers
+    -> faster-whisper / Hugging Face pyannote processors
     -> SQLite + Local File Storage
 ```
 
@@ -41,15 +41,15 @@ The backend exposes local HTTP APIs for:
 - settings retrieval and updates
 - VTT export
 
-The API layer should validate requests, map HTTP behavior to service calls, and avoid embedding WhisperX-specific orchestration directly in route handlers.
+The API layer should validate requests, map HTTP behavior to service calls, and avoid embedding inference orchestration directly in route handlers.
 
 ### Application Services
 
 Services hold reusable domain behavior:
 
 - storage service for local file placement, duplicate filename handling, and stream paths
-- transcription service for provider orchestration
-- diarization service for speaker labeling
+- transcription service for faster-whisper orchestration
+- diarization service for Hugging Face pyannote speaker labeling when a token is supplied
 - sentence chunking service for canonical sentence segments
 - speaker sample service for selecting useful sample timestamp ranges
 - VTT service for export formatting
@@ -77,15 +77,15 @@ Dependencies should flow inward:
 
 - UI depends on API contracts.
 - API routes depend on services.
-- Services depend on repositories, storage adapters, and provider interfaces.
-- Provider implementations depend on WhisperX, pyannote, or online SDKs.
+- Services depend on repositories, storage adapters, and processor interfaces.
+- Processor implementations depend on faster-whisper, pyannote, Hugging Face Hub, and local runtime libraries.
 - Persistence adapters depend on SQLite and filesystem APIs.
 
-Provider-specific code should not leak into UI components or database models except through explicit provider/model setting fields.
+Processor-specific code should not leak into UI components or database models except through explicit engine/model setting fields.
 
 ## Core Constraints
 
-- Local models are the default path; online providers are opt-in.
+- Local faster-whisper transcription is the default path; Hugging Face pyannote diarization is enabled by a transient token, and the no-token path falls back to `SPEAKER_00`.
 - The canonical transcript unit is a sentence with stable ID, timestamps, speaker ID, original text, and current text.
 - Speaker display names are user-editable, but internal diarization labels remain stable.
 - Original transcription output is preserved even when current transcript text changes.
