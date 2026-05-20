@@ -31,3 +31,7 @@ The implementation target is:
 - Do not overwrite internal diarization speaker IDs when implementing speaker renaming.
 - Treat transcript sentences as the canonical transcript unit; speaker-turn views are derived display groupings.
 - Prefer updating existing docs over creating overlapping documents for the same concern.
+
+## Project Initialisation
+
+Always load envrionment variables from `.env` file before running any agent or script. This file may contain sensitive information and should not be shared. The `.env` file is included in `.gitignore` to prevent accidental commits of sensitive data.

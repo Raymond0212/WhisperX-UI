@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib
 import sqlite3
+import sys
+import types
 
 from fastapi.testclient import TestClient
 
@@ -619,3 +621,106 @@ def test_pyannote_extract_intervals_prefers_exclusive_speaker_diarization_wrappe
         {"start": 0.0, "end": 1.1, "speaker": "SPEAKER_01"},
         {"start": 1.1, "end": 2.4, "speaker": "SPEAKER_02"},
     ]
+
+
+def test_diarize_with_pyannote_uses_preloaded_waveform_input(tmp_path, monkeypatch):
+    import torch
+
+    diarization_module = importlib.import_module("whisperx_ui_backend.processors.pyannote_diarization")
+    calls: dict = {}
+
+    class FakeTurn:
+        def __init__(self, start: float, end: float):
+            self.start = start
+            self.end = end
+
+    class FakeAnnotation:
+        def itertracks(self, yield_label=True):
+            assert yield_label is True
+            yield (FakeTurn(0.0, 0.9), None, "SPEAKER_01")
+
+    class FakePipelineInstance:
+        def __call__(self, diarization_input, **kwargs):
+            calls["input"] = diarization_input
+            calls["kwargs"] = kwargs
+            return FakeAnnotation()
+
+    class FakePipeline:
+        @staticmethod
+        def from_pretrained(model_id, token=None, use_auth_token=None):
+            calls["model_id"] = model_id
+            calls["token"] = token if token is not None else use_auth_token
+            return FakePipelineInstance()
+
+    fake_pyannote_audio = types.SimpleNamespace(Pipeline=FakePipeline)
+    fake_pyannote_pkg = types.ModuleType("pyannote")
+    fake_pyannote_pkg.audio = fake_pyannote_audio
+    monkeypatch.setitem(sys.modules, "pyannote", fake_pyannote_pkg)
+    monkeypatch.setitem(sys.modules, "pyannote.audio", fake_pyannote_audio)
+
+    stereo_waveform = torch.tensor([[0.2, -0.2, 0.0], [0.0, 0.2, -0.2]], dtype=torch.float32)
+    monkeypatch.setattr(
+        "torchaudio.load",
+        lambda _: (stereo_waveform, 16000),
+    )
+
+    intervals = diarization_module.diarize_with_pyannote(
+        audio_path=str(tmp_path / "audio.wav"),
+        model_id="pyannote/speaker-diarization-community-1",
+        hf_token="hf-test-token",
+        speaker_count=2,
+    )
+    assert intervals == [{"start": 0.0, "end": 0.9, "speaker": "SPEAKER_01"}]
+    assert calls["model_id"] == "pyannote/speaker-diarization-community-1"
+    assert calls["token"] == "hf-test-token"
+    assert calls["kwargs"]["num_speakers"] == 2
+    assert calls["input"]["sample_rate"] == 16000
+    assert tuple(calls["input"]["waveform"].shape) == (1, 3)
+
+
+def test_diarize_with_pyannote_falls_back_when_torchaudio_decode_fails(tmp_path, monkeypatch):
+    import torch
+
+    diarization_module = importlib.import_module("whisperx_ui_backend.processors.pyannote_diarization")
+    calls: dict = {}
+
+    class FakeTurn:
+        def __init__(self, start: float, end: float):
+            self.start = start
+            self.end = end
+
+    class FakeAnnotation:
+        def itertracks(self, yield_label=True):
+            yield (FakeTurn(0.0, 0.5), None, "SPEAKER_00")
+
+    class FakePipelineInstance:
+        def __call__(self, diarization_input, **kwargs):
+            calls["input"] = diarization_input
+            return FakeAnnotation()
+
+    class FakePipeline:
+        @staticmethod
+        def from_pretrained(model_id, token=None, use_auth_token=None):
+            return FakePipelineInstance()
+
+    fake_pyannote_audio = types.SimpleNamespace(Pipeline=FakePipeline)
+    fake_pyannote_pkg = types.ModuleType("pyannote")
+    fake_pyannote_pkg.audio = fake_pyannote_audio
+    monkeypatch.setitem(sys.modules, "pyannote", fake_pyannote_pkg)
+    monkeypatch.setitem(sys.modules, "pyannote.audio", fake_pyannote_audio)
+
+    monkeypatch.setattr("torchaudio.load", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("bad decode")))
+    monkeypatch.setattr(
+        "faster_whisper.audio.decode_audio",
+        lambda _: [0.1, -0.1, 0.0, 0.2],
+    )
+
+    intervals = diarization_module.diarize_with_pyannote(
+        audio_path=str(tmp_path / "audio.wav"),
+        model_id="pyannote/speaker-diarization-community-1",
+        hf_token="hf-test-token",
+    )
+    assert intervals == [{"start": 0.0, "end": 0.5, "speaker": "SPEAKER_00"}]
+    assert calls["input"]["sample_rate"] == 16000
+    assert tuple(calls["input"]["waveform"].shape) == (1, 4)
+    assert calls["input"]["waveform"].dtype == torch.float32

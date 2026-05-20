@@ -3,6 +3,41 @@ from __future__ import annotations
 from typing import Any
 
 
+def _load_waveform_for_pyannote(audio_path: str) -> dict[str, Any]:
+    try:
+        import torch
+    except ImportError as exc:
+        raise RuntimeError("torch is required for pyannote diarization audio loading.") from exc
+
+    waveform = None
+    sample_rate = None
+    try:
+        import torchaudio
+
+        try:
+            waveform, sample_rate = torchaudio.load(audio_path, backend="soundfile")
+        except Exception:
+            waveform, sample_rate = torchaudio.load(audio_path)
+    except Exception:
+        # Fallback avoids torchaudio/torchcodec runtime coupling in constrained environments.
+        try:
+            from faster_whisper.audio import decode_audio
+        except Exception as exc:
+            raise RuntimeError(
+                "Unable to decode audio for pyannote diarization with torchaudio or faster-whisper."
+            ) from exc
+        decoded = decode_audio(audio_path)
+        waveform = torch.tensor(decoded, dtype=torch.float32).unsqueeze(0)
+        sample_rate = 16000
+
+    if waveform.ndim != 2:
+        raise RuntimeError(f"Unexpected waveform shape for diarization input: {tuple(waveform.shape)}")
+    if waveform.shape[0] > 1:
+        waveform = waveform.mean(dim=0, keepdim=True)
+    waveform = waveform.to(dtype=torch.float32)
+    return {"waveform": waveform, "sample_rate": int(sample_rate)}
+
+
 def _extract_intervals(diarization: Any) -> list[dict[str, Any]]:
     intervals: list[dict[str, Any]] = []
     track_source = None
@@ -67,5 +102,6 @@ def diarize_with_pyannote(
         }.items()
         if value is not None
     }
-    diarization = pipeline(audio_path, **kwargs)
+    diarization_input = _load_waveform_for_pyannote(audio_path)
+    diarization = pipeline(diarization_input, **kwargs)
     return _extract_intervals(diarization)

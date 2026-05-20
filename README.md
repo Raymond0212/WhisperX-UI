@@ -94,4 +94,4 @@ Opt-in real-audio evaluation:
 HF_TOKEN=hf_xxx ./scripts/run-real-diarization-benchmark.sh
 ```
 
-`run-real-diarization-benchmark.sh` uses the real pipeline path (transcription + diarization + assignment), computes word/sentence speaker accuracy proxies and speaker-change precision/recall after label mapping, and fails on threshold regressions.
+`run-real-diarization-benchmark.sh` uses the real pipeline path (transcription + diarization + assignment), computes word/sentence speaker accuracy proxies, and gates speaker-change precision/recall with a time collar (default `SPEAKER_CHANGE_COLLAR_SECONDS=0.75`) to tolerate near-boundary alignment jitter.

@@ -185,6 +185,7 @@ Expected behavior:
 - use a Hugging Face token when pyannote diarization is enabled
 - allow the zero-basic-config path to complete without a token by assigning a single `SPEAKER_00` label
 - load the model through the pyannote pipeline interface
+- pass waveform input to the pyannote pipeline after decoding with torchaudio, falling back to `faster_whisper.audio.decode_audio` when torchaudio decoding is unavailable
 - support speaker controls:
   - speaker count
   - min speakers

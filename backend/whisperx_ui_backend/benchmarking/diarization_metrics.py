@@ -66,3 +66,43 @@ def speaker_change_metrics(predicted: list[str], reference: list[str]) -> tuple[
     precision = tp / (tp + fp) if (tp + fp) else 0.0
     recall = tp / (tp + fn) if (tp + fn) else 0.0
     return precision, recall
+
+
+def speaker_change_metrics_with_collar(
+    predicted_boundaries: list[float],
+    reference_boundaries: list[float],
+    collar_seconds: float = 0.5,
+) -> tuple[float, float]:
+    if collar_seconds < 0:
+        raise ValueError("collar_seconds must be non-negative")
+
+    pred = sorted(float(x) for x in predicted_boundaries)
+    ref = sorted(float(x) for x in reference_boundaries)
+    if not pred and not ref:
+        return 1.0, 1.0
+    if not pred:
+        return 0.0, 0.0
+    if not ref:
+        return 0.0, 0.0
+
+    used_ref: set[int] = set()
+    tp = 0
+    for p in pred:
+        best_idx = None
+        best_dist = None
+        for idx, r in enumerate(ref):
+            if idx in used_ref:
+                continue
+            dist = abs(p - r)
+            if dist <= collar_seconds and (best_dist is None or dist < best_dist):
+                best_dist = dist
+                best_idx = idx
+        if best_idx is not None:
+            used_ref.add(best_idx)
+            tp += 1
+
+    fp = len(pred) - tp
+    fn = len(ref) - tp
+    precision = tp / (tp + fp) if (tp + fp) else 0.0
+    recall = tp / (tp + fn) if (tp + fn) else 0.0
+    return precision, recall

@@ -34,6 +34,7 @@ from pathlib import Path
 
 from whisperx_ui_backend.benchmarking.diarization_metrics import (
     best_label_mapping_accuracy,
+    speaker_change_metrics_with_collar,
     speaker_change_metrics,
     validate_real_audio_manifest,
 )
@@ -52,6 +53,7 @@ min_word_acc = float(os.environ.get("MIN_WORD_SPEAKER_ACCURACY", "0.65"))
 min_sentence_acc = float(os.environ.get("MIN_SENTENCE_SPEAKER_ACCURACY", "0.60"))
 min_change_precision = float(os.environ.get("MIN_SPEAKER_CHANGE_PRECISION", "0.55"))
 min_change_recall = float(os.environ.get("MIN_SPEAKER_CHANGE_RECALL", "0.55"))
+change_collar_seconds = float(os.environ.get("SPEAKER_CHANGE_COLLAR_SECONDS", "0.75"))
 
 def pick_turn_speaker(start: float, end: float, turns: list[dict]) -> str | None:
     midpoint = (start + end) / 2
@@ -78,6 +80,7 @@ def pick_turn_speaker(start: float, end: float, turns: list[dict]) -> str | None
 
 word_pred_all: list[str] = []
 word_ref_all: list[str] = []
+word_midpoints_all: list[float] = []
 sent_pred_all: list[str] = []
 sent_ref_all: list[str] = []
 
@@ -116,6 +119,7 @@ for case in cases:
                 continue
             word_pred_all.append(str(word["speaker"]))
             word_ref_all.append(ref_speaker)
+            word_midpoints_all.append((float(word["start"]) + float(word["end"])) / 2)
 
     sentence_rows = []
     for segment in segments:
@@ -130,6 +134,22 @@ for case in cases:
 word_acc, word_map = best_label_mapping_accuracy(word_pred_all, word_ref_all)
 mapped_word_pred = [word_map.get(label, label) for label in word_pred_all]
 change_precision, change_recall = speaker_change_metrics(mapped_word_pred, word_ref_all)
+
+pred_change_boundaries = [
+    word_midpoints_all[i]
+    for i in range(1, len(mapped_word_pred))
+    if mapped_word_pred[i] != mapped_word_pred[i - 1]
+]
+ref_change_boundaries = [
+    word_midpoints_all[i]
+    for i in range(1, len(word_ref_all))
+    if word_ref_all[i] != word_ref_all[i - 1]
+]
+tolerant_change_precision, tolerant_change_recall = speaker_change_metrics_with_collar(
+    pred_change_boundaries,
+    ref_change_boundaries,
+    collar_seconds=change_collar_seconds,
+)
 sentence_acc, _ = best_label_mapping_accuracy(sent_pred_all, sent_ref_all)
 
 print("[real-benchmark] cases:", len(cases))
@@ -138,9 +158,18 @@ print("[real-benchmark] sentence_speaker_accuracy:", f"{sentence_acc:.3f}")
 print("[real-benchmark] speaker_change_precision:", f"{change_precision:.3f}")
 print("[real-benchmark] speaker_change_recall:", f"{change_recall:.3f}")
 print(
+    "[real-benchmark] speaker_change_precision_collar:",
+    f"{tolerant_change_precision:.3f}",
+)
+print(
+    "[real-benchmark] speaker_change_recall_collar:",
+    f"{tolerant_change_recall:.3f}",
+)
+print(
     "[real-benchmark] thresholds:",
     f"word>={min_word_acc:.2f}, sentence>={min_sentence_acc:.2f},",
-    f"change_precision>={min_change_precision:.2f}, change_recall>={min_change_recall:.2f}",
+    f"change_precision(collar={change_collar_seconds:.2f}s)>={min_change_precision:.2f},",
+    f"change_recall(collar={change_collar_seconds:.2f}s)>={min_change_recall:.2f}",
 )
 
 errors = []
@@ -148,12 +177,14 @@ if word_acc < min_word_acc:
     errors.append(f"word speaker accuracy {word_acc:.3f} below threshold {min_word_acc:.3f}")
 if sentence_acc < min_sentence_acc:
     errors.append(f"sentence speaker accuracy {sentence_acc:.3f} below threshold {min_sentence_acc:.3f}")
-if change_precision < min_change_precision:
+if tolerant_change_precision < min_change_precision:
     errors.append(
-        f"speaker-change precision {change_precision:.3f} below threshold {min_change_precision:.3f}"
+        f"speaker-change precision (collar) {tolerant_change_precision:.3f} below threshold {min_change_precision:.3f}"
     )
-if change_recall < min_change_recall:
-    errors.append(f"speaker-change recall {change_recall:.3f} below threshold {min_change_recall:.3f}")
+if tolerant_change_recall < min_change_recall:
+    errors.append(
+        f"speaker-change recall (collar) {tolerant_change_recall:.3f} below threshold {min_change_recall:.3f}"
+    )
 
 if errors:
     print("[real-benchmark][FAIL] threshold check failed:")
