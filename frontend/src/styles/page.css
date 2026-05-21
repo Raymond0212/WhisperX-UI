@@ -1,0 +1,10 @@
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  isolation: isolate;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+

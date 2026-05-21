@@ -1,0 +1,98 @@
+.modal-backdrop {
+  background: rgba(20, 31, 31, 0.22);
+  display: grid;
+  inset: 0;
+  padding: clamp(0.9rem, 3vw, 2rem);
+  position: fixed;
+  z-index: 20;
+}
+
+.modal-backdrop--settings {
+  align-items: start;
+  justify-items: end;
+}
+
+.modal-backdrop--center {
+  align-items: center;
+  justify-items: center;
+}
+
+.settings-modal,
+.upload-modal {
+  backdrop-filter: blur(30px) saturate(1.2);
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 24px;
+  box-shadow: 0 28px 80px rgba(26, 42, 42, 0.24);
+  max-height: calc(100vh - clamp(1.8rem, 6vw, 4rem));
+  max-width: 46rem;
+  overflow: auto;
+  padding: 1rem;
+  width: min(100%, 46rem);
+}
+
+.upload-modal {
+  max-width: 34rem;
+}
+
+.settings-modal header,
+.upload-modal header {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 0.9rem;
+}
+
+.settings-modal form {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-modal form button[type="submit"] {
+  justify-self: end;
+}
+
+.upload-modal form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.upload-modal form button[type="submit"] {
+  justify-self: end;
+}
+
+.selected-file-name {
+  background: rgba(240, 248, 246, 0.84);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--graphite);
+  margin: 0 0 0.9rem;
+  overflow-wrap: anywhere;
+  padding: 0.8rem 0.9rem;
+}
+
+.page-drop-overlay {
+  align-items: center;
+  backdrop-filter: blur(24px) saturate(1.25);
+  background: rgba(223, 244, 240, 0.72);
+  display: grid;
+  inset: 0;
+  justify-items: center;
+  pointer-events: none;
+  position: fixed;
+  z-index: 15;
+}
+
+.page-drop-overlay div {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.76);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  color: var(--graphite);
+  font-size: clamp(1.1rem, 3vw, 1.8rem);
+  font-weight: 850;
+  padding: 0.9rem 1.25rem;
+}
+

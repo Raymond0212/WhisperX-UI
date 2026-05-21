@@ -213,7 +213,9 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   render(<App />);
 
   expect(await screen.findByText("Broken clip")).not.toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /open settings/i }));
   expect(screen.getByDisplayValue("distil-large-v3")).not.toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /close settings/i }));
 
   const file = new File(["demo audio"], "meeting.wav", { type: "audio/wav" });
   fireEvent.change(screen.getByLabelText("Audio file"), { target: { files: [file] } });
@@ -227,10 +229,12 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   expect(uploadRequest.options.body.get("file").name).toBe("meeting.wav");
   expect(uploadRequest.options.body.get("display_title")).toBe("Demo upload");
 
+  fireEvent.click(screen.getByRole("button", { name: /open settings/i }));
   fireEvent.change(screen.getByLabelText("Diarization/HF token"), {
     target: { value: "  hf-secret  " },
   });
-  fireEvent.click(screen.getByRole("button", { name: /process/i }));
+  fireEvent.click(screen.getByRole("button", { name: /close settings/i }));
+  fireEvent.click(screen.getByRole("button", { name: /^process$/i }));
 
   await screen.findByText("Processing complete.");
   const modelRequest = requests.find(
@@ -250,10 +254,10 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
     diarization_model: "pyannote/speaker-diarization-community-1",
     settings: { diarization_token: "hf-secret" },
   });
-  expect(screen.getByText("Local model ready")).not.toBeNull();
+  expect(screen.getByText(/Local model ready/)).not.toBeNull();
 
   expect(await screen.findByDisplayValue("Hello world.")).not.toBeNull();
-  expect(screen.getByRole("link", { name: /export vtt/i }).getAttribute("href")).toBe(
+  expect(screen.getByRole("button", { name: /export vtt/i }).dataset.exportUrl).toBe(
     `${API_BASE}/api/jobs/job-complete/export.vtt`,
   );
   const player = document.querySelector("audio");
@@ -271,8 +275,9 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   fireEvent.timeUpdate(player);
   expect(pause).toHaveBeenCalledTimes(2);
 
-  const speakerNameInput = screen.getByDisplayValue("SPEAKER_00");
-  fireEvent.change(speakerNameInput, { target: { value: "Alice" } });
+  fireEvent.click(screen.getByRole("button", { name: "SPEAKER_00" }));
+  const speakerNameInput = screen.getByRole("textbox", { name: /display name for speaker_00/i });
+  speakerNameInput.textContent = "Alice";
   fireEvent.blur(speakerNameInput);
 
   await waitFor(() => expect(screen.getAllByText("Alice").length).toBeGreaterThan(0));
@@ -291,12 +296,10 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   });
 
   fireEvent.click(screen.getByRole("button", { name: /speaker turns/i }));
-  await waitFor(() => expect(screen.getAllByText("0:01-0:03").length).toBeGreaterThan(1));
-  fireEvent.click(screen.getByRole("button", { name: /play sentence sentence-1/i }));
-  expect(player.currentTime).toBe(1);
-  expect(play).toHaveBeenCalledTimes(3);
-  const turnSentenceText = screen.getByDisplayValue("Hello edited.");
-  fireEvent.change(turnSentenceText, { target: { value: "Hello turn edit." } });
+  await screen.findByRole("button", { name: /edit sentence sentence-1/i });
+  fireEvent.click(screen.getByRole("button", { name: /edit sentence sentence-1/i }));
+  const turnSentenceText = screen.getByRole("textbox", { name: /transcript sentence sentence-1/i });
+  turnSentenceText.textContent = "Hello turn edit.";
   fireEvent.blur(turnSentenceText);
 
   await waitFor(() => {
@@ -306,17 +309,17 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
     expect(JSON.parse(sentencePatches.at(-1).options.body)).toEqual({ current_text: "Hello turn edit." });
   });
 
-  const failedRow = screen.getByRole("button", { name: /broken clipfailed/i });
+  const failedRow = screen.getByRole("button", { name: /^broken clip$/i });
   fireEvent.click(failedRow);
   const failedJobButton = await screen.findByRole("button", { name: /failed .* distil-large-v3/i });
   fireEvent.click(failedJobButton);
   expect(await screen.findByText("Model crashed")).not.toBeNull();
 
-  fireEvent.click(screen.getByRole("button", { name: /demo uploaduploaded/i }));
+  fireEvent.click(screen.getByRole("button", { name: /^demo upload$/i }));
   await screen.findByDisplayValue("Demo upload");
   fireEvent.click(screen.getByRole("button", { name: /delete/i }));
 
-  await screen.findByText("Upload or select local audio to begin.");
+  await screen.findByText("Select an audio file to open the workspace.");
   expect(screen.queryByDisplayValue("Demo upload")).toBeNull();
   expect(within(screen.getByText("Library").closest(".library")).queryByText("Demo upload")).toBeNull();
 });

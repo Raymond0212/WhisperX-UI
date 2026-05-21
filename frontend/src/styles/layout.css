@@ -1,0 +1,58 @@
+.layout {
+  display: grid;
+  gap: clamp(0.85rem, 1.6vw, 1.25rem);
+  grid-template-columns: minmax(20rem, 44rem) minmax(0, 0fr);
+  flex: 1;
+  height: auto;
+  margin: 0 auto;
+  max-width: var(--shell-max);
+  min-height: 0;
+  overflow: hidden;
+  padding: clamp(0.85rem, 2vw, 1.3rem);
+  width: 100%;
+  transition:
+    grid-template-columns 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    max-width 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.layout--library {
+  grid-template-columns: 1fr;
+}
+
+.layout--active {
+  grid-template-columns: minmax(13.5rem, 18rem) minmax(0, 1fr);
+}
+
+.sidebar,
+.toolbar,
+.review-header,
+.jobs-strip,
+.segmented,
+audio {
+  backdrop-filter: blur(22px) saturate(1.18);
+  background: var(--glass);
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  box-shadow: var(--shadow-soft);
+}
+
+.sidebar {
+  align-self: stretch;
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 1rem;
+  transition:
+    border-radius 320ms ease,
+    padding 320ms ease,
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.layout--library .workspace {
+  display: none;
+}
+
+.layout--library .sidebar {
+  width: 100%;
+}

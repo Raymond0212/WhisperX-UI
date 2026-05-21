@@ -1,6 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Download, FileAudio, Play, Save, Trash2, Upload } from "lucide-react";
+import { AppHeader } from "./components/AppHeader.jsx";
+import { LibraryPanel } from "./components/LibraryPanel.jsx";
+import { SettingsModal } from "./components/SettingsModal.jsx";
+import { ToastViewport } from "./components/ToastViewport.jsx";
+import { UploadModal } from "./components/UploadModal.jsx";
+import { WorkspacePanel } from "./components/WorkspacePanel.jsx";
+import { api } from "./api.js";
 import {
   DEFAULT_JOB_SETTINGS,
   applySentenceUpdate,
@@ -8,25 +14,11 @@ import {
   buildModelPrepareRequest,
   buildJobRequest,
   createRangePlaybackController,
-  formatTime,
   groupSpeakerTurns,
   mergeJobSettings,
   normalizeJobSettings,
 } from "./jobUtils.js";
 import "./styles.css";
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
-
-async function api(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, options);
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: response.statusText }));
-    throw new Error(error.detail || response.statusText);
-  }
-  if (response.status === 204) return null;
-  const contentType = response.headers.get("content-type") || "";
-  return contentType.includes("application/json") ? response.json() : response.text();
-}
 
 export function App() {
   const [audioItems, setAudioItems] = useState([]);
@@ -43,18 +35,33 @@ export function App() {
     diarization_models: [],
     defaults: {},
   });
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [isDraggingUpload, setIsDraggingUpload] = useState(false);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [viewMode, setViewMode] = useState("sentences");
-  const [message, setMessage] = useState("");
+  const [toasts, setToasts] = useState([]);
+  const fileInputRef = useRef(null);
+  const dragDepthRef = useRef(0);
   const audioRef = useRef(null);
   const playbackControllerRef = useRef(null);
+  const toastIdRef = useRef(0);
+  const toastTimersRef = useRef(new Map());
 
   useEffect(() => {
+    notify("Ready");
     refreshLibrary();
     loadSettings();
     loadModels();
     loadModelOptions();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      toastTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      toastTimersRef.current.clear();
+    };
   }, []);
 
   useEffect(() => {
@@ -71,6 +78,37 @@ export function App() {
 
   async function refreshLibrary() {
     setAudioItems(await api("/api/audio"));
+  }
+
+  function removeToast(id) {
+    const timer = toastTimersRef.current.get(id);
+    if (timer) window.clearTimeout(timer);
+    toastTimersRef.current.delete(id);
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+  }
+
+  function scheduleToastRemoval(id, duration) {
+    if (!duration) return;
+    const timer = window.setTimeout(() => removeToast(id), duration);
+    toastTimersRef.current.set(id, timer);
+  }
+
+  function notify(text, options = {}) {
+    const id = toastIdRef.current + 1;
+    toastIdRef.current = id;
+    const duration = options.duration === undefined ? 2800 : options.duration;
+    setToasts((current) => [...current.slice(-2), { id, text }]);
+    scheduleToastRemoval(id, duration);
+    return id;
+  }
+
+  function updateToast(id, text, options = {}) {
+    const existingTimer = toastTimersRef.current.get(id);
+    if (existingTimer) window.clearTimeout(existingTimer);
+    toastTimersRef.current.delete(id);
+    const duration = options.duration === undefined ? 2800 : options.duration;
+    setToasts((current) => current.map((toast) => (toast.id === id ? { ...toast, text } : toast)));
+    scheduleToastRemoval(id, duration);
   }
 
   async function loadSettings() {
@@ -115,20 +153,50 @@ export function App() {
   }
 
   function handleFileInput(event) {
-    setSelectedFile(event.currentTarget.files[0] || null);
+    const file = event.currentTarget.files[0] || null;
+    setSelectedFile(file);
+    setIsUploadModalOpen(Boolean(file));
   }
 
   function handleDrop(event) {
     event.preventDefault();
+    dragDepthRef.current = 0;
     setIsDraggingUpload(false);
     const file = event.dataTransfer.files[0];
-    if (file) setSelectedFile(file);
+    if (!file) return;
+    setSelectedFile(file);
+    setIsUploadModalOpen(true);
+  }
+
+  function handlePageDragEnter(event) {
+    if (!Array.from(event.dataTransfer?.types || []).includes("Files")) return;
+    event.preventDefault();
+    dragDepthRef.current += 1;
+    setIsDraggingUpload(true);
+  }
+
+  function handlePageDragOver(event) {
+    if (!Array.from(event.dataTransfer?.types || []).includes("Files")) return;
+    event.preventDefault();
+  }
+
+  function handlePageDragLeave(event) {
+    if (!Array.from(event.dataTransfer?.types || []).includes("Files")) return;
+    event.preventDefault();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setIsDraggingUpload(false);
+  }
+
+  function closeUploadModal() {
+    setIsUploadModalOpen(false);
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   async function uploadAudio(event) {
     event.preventDefault();
     const form = event.currentTarget;
-    const file = selectedFile || form.elements.file.files[0];
+    const file = selectedFile;
     if (!file) return;
     const body = new FormData();
     body.append("file", file);
@@ -136,7 +204,9 @@ export function App() {
     const audio = await api("/api/audio", { method: "POST", body });
     form.reset();
     setSelectedFile(null);
-    setMessage("Upload saved locally.");
+    setIsUploadModalOpen(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    notify("Upload saved locally.");
     await refreshLibrary();
     await selectAudio(audio);
   }
@@ -161,24 +231,31 @@ export function App() {
     await refreshLibrary();
   }
 
-  async function processSelectedAudio() {
-    if (!selectedAudio) return;
-    setMessage("Preparing local model...");
+  async function processSelectedAudio(audioOverride = selectedAudio) {
+    if (!audioOverride) return;
+    setSelectedAudio(audioOverride);
+    setSelectedJob(null);
+    setSpeakers([]);
+    setSentences([]);
+    const modelToastId = notify("Preparing local model...", { duration: null });
     const prepared = await api("/api/models/prepare-basic", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(buildModelPrepareRequest(jobSettings)),
     });
     setLocalModels(prepared.models);
-    setMessage("Processing audio...");
+    const preparedModel = prepared.models.find((model) => model.key === jobSettings.transcription_model);
+    updateToast(modelToastId, `Local model ready · ${preparedModel?.display_name || jobSettings.transcription_model}`);
+    const processToastId = notify("Processing audio...", { duration: null });
     const job = await api("/api/jobs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(buildJobRequest(selectedAudio.id, jobSettings)),
+      body: JSON.stringify(buildJobRequest(audioOverride.id, jobSettings)),
     });
-    setJobs(await api(`/api/audio/${selectedAudio.id}/jobs`));
+    setJobs(await api(`/api/audio/${audioOverride.id}/jobs`));
     await openJob(job);
-    setMessage(job.status === "completed" ? "Processing complete." : job.error_message || job.status);
+    await refreshLibrary();
+    updateToast(processToastId, job.status === "completed" ? "Processing complete." : job.error_message || job.status);
   }
 
   async function updateSentence(sentence, currentText) {
@@ -211,8 +288,9 @@ export function App() {
       body: JSON.stringify({ settings: normalized }),
     });
     setSettings(saved);
-    setJobSettings(mergeJobSettings(saved));
-    setMessage("Settings saved.");
+    setJobSettings((current) => mergeJobSettings({ ...saved, diarization_token: current.diarization_token || "" }));
+    notify("Settings saved.");
+    setIsSettingsOpen(false);
   }
 
   function playRange(start, end) {
@@ -224,391 +302,76 @@ export function App() {
   }
 
   const speakerTurns = useMemo(() => groupSpeakerTurns(sentences), [sentences]);
-  const basicModel = localModels.find((model) => model.key === jobSettings.transcription_model);
+  const layoutMode = selectedAudio ? "layout layout--active" : "layout layout--library";
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const filteredAudioItems = useMemo(() => {
+    const query = deferredSearchQuery.trim().toLocaleLowerCase();
+    if (!query) return audioItems;
+    return audioItems.filter((audio) => audio.display_title.toLocaleLowerCase().includes(query));
+  }, [audioItems, deferredSearchQuery]);
 
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div>
-          <h1>WhisperX UI</h1>
-          <p>Local faster-whisper transcription with optional Hugging Face speaker diarization.</p>
-        </div>
-        <span className="status-pill">{message || "Ready"}</span>
-      </header>
+    <main
+      className={`app-shell ${isDraggingUpload ? "is-page-dragging" : ""}`}
+      onDragEnter={handlePageDragEnter}
+      onDragOver={handlePageDragOver}
+      onDragLeave={handlePageDragLeave}
+      onDrop={handleDrop}
+    >
+      <AppHeader onOpenSettings={() => setIsSettingsOpen(true)} />
+      <ToastViewport toasts={toasts} />
 
-      <section className="layout">
-        <aside className="sidebar">
-          <form className="upload-panel" onSubmit={uploadAudio}>
-            <label>
-              Audio file
-              <input name="file" type="file" accept=".mp3,.wav,.m4a,.flac,.ogg,.aac" onChange={handleFileInput} />
-            </label>
-            <div
-              className={`drop-zone ${isDraggingUpload ? "dragging" : ""}`}
-              onDragOver={(event) => {
-                event.preventDefault();
-                setIsDraggingUpload(true);
-              }}
-              onDragLeave={() => setIsDraggingUpload(false)}
-              onDrop={handleDrop}
-            >
-              {selectedFile ? selectedFile.name : "Drop audio file here"}
-            </div>
-            <label>
-              Title
-              <input name="display_title" type="text" placeholder="Optional display title" />
-            </label>
-            <button type="submit">
-              <Upload size={16} /> Upload
-            </button>
-          </form>
-
-          <div className="library">
-            <h2>Library</h2>
-            {audioItems.map((audio) => (
-              <button
-                type="button"
-                className={`library-row ${selectedAudio?.id === audio.id ? "active" : ""}`}
-                key={audio.id}
-                onClick={() => selectAudio(audio)}
-              >
-                <FileAudio size={17} />
-                <span>{audio.display_title}</span>
-                <small>{audio.latest_job_status || "uploaded"}</small>
-              </button>
-            ))}
-          </div>
-        </aside>
-
-        <section className="workspace">
-          {selectedAudio ? (
-            <>
-              <div className="audio-header">
-                <input
-                  value={selectedAudio.display_title}
-                  onChange={(event) => setSelectedAudio({ ...selectedAudio, display_title: event.target.value })}
-                  onBlur={(event) => updateTitle(selectedAudio, event.target.value)}
-                />
-                <div className="toolbar">
-                  <button type="button" onClick={processSelectedAudio}>
-                    <Play size={16} /> Process
-                  </button>
-                  <button type="button" onClick={() => deleteAudio(selectedAudio)}>
-                    <Trash2 size={16} /> Delete
-                  </button>
-                </div>
-              </div>
-
-              <audio ref={audioRef} controls src={`${API_BASE}/api/audio/${selectedAudio.id}/stream`} />
-
-              <ModelConfig settings={jobSettings} onChange={updateJobSetting} modelOptions={modelOptions} />
-              <div className="model-status">
-                <strong>{basicModel?.downloaded ? "Local model ready" : "Local model will download on process"}</strong>
-                <span>{basicModel?.display_name || "Model will download on first run"}</span>
-              </div>
-
-              <div className="jobs-strip">
-                {jobs.map((job) => (
-                  <button type="button" key={job.id} onClick={() => openJob(job)}>
-                    {job.status} · {job.transcription_model}
-                  </button>
-                ))}
-              </div>
-
-              {selectedJob?.status === "failed" && <p className="error">{selectedJob.error_message}</p>}
-              {selectedJob?.status === "completed" && (
-                <TranscriptReview
-                  job={selectedJob}
-                  speakers={speakers}
-                  sentences={sentences}
-                  speakerTurns={speakerTurns}
-                  viewMode={viewMode}
-                  setViewMode={setViewMode}
-                  onPlay={playRange}
-                  onRenameSpeaker={renameSpeaker}
-                  onUpdateSentence={updateSentence}
-                />
-              )}
-            </>
-          ) : (
-            <div className="empty-state">Upload or select local audio to begin.</div>
-          )}
-        </section>
-
-        <aside className="settings">
-          <h2>Settings</h2>
-          <form onSubmit={saveSettings} key={JSON.stringify(settings)}>
-            <SettingsFields settings={mergeJobSettings(settings)} modelOptions={modelOptions} />
-            <button type="submit">
-              <Save size={16} /> Save
-            </button>
-          </form>
-        </aside>
-      </section>
-    </main>
-  );
-}
-
-function ProviderModelFields({ settings, onChange, modelOptions }) {
-  const inputProps = (name) => ({
-    name,
-    value: settings[name] ?? "",
-    onChange: (event) => onChange(name, event.target.value),
-  });
-  return (
-    <>
-      <label>
-        Transcription engine
-        <input value="faster-whisper" readOnly />
-      </label>
-      <label>
-        Transcription model
-        <select {...inputProps("transcription_model")}>
-          {modelOptions.transcription_models.map((model) => (
-            <option value={model.id} key={model.id}>
-              {model.id}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Diarization engine
-        <input value="huggingface-pyannote" readOnly />
-      </label>
-      <label>
-        Diarization model
-        <select {...inputProps("diarization_model")}>
-          {modelOptions.diarization_models.map((model) => (
-            <option value={model.id} key={model.id}>
-              {model.id}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Diarization/HF token
-        <input {...inputProps("diarization_token")} type="password" placeholder="Optional (enables pyannote diarization)" />
-      </label>
-    </>
-  );
-}
-
-function RuntimeFields({ settings, onChange }) {
-  const inputProps = (name) => ({
-    name,
-    value: settings[name] ?? "",
-    onChange: (event) => onChange(name, event.target.value),
-  });
-  return (
-    <>
-      <label>
-        Language
-        <input {...inputProps("language")} placeholder="auto" />
-      </label>
-      <label>
-        Device
-        <select {...inputProps("device")}>
-          <option value="auto">auto</option>
-          <option value="cpu">cpu</option>
-          <option value="cuda">cuda</option>
-        </select>
-      </label>
-      <label>
-        Compute type
-        <input {...inputProps("compute_type")} />
-      </label>
-      <label>
-        Batch size
-        <input {...inputProps("batch_size")} type="number" min="1" max="128" />
-      </label>
-      <label>
-        Speaker count
-        <input {...inputProps("speaker_count")} type="number" min="1" max="20" placeholder="auto" />
-      </label>
-      <label>
-        Min speakers
-        <input {...inputProps("min_speakers")} type="number" min="1" max="20" placeholder="auto" />
-      </label>
-      <label>
-        Max speakers
-        <input {...inputProps("max_speakers")} type="number" min="1" max="20" placeholder="auto" />
-      </label>
-    </>
-  );
-}
-
-function ModelConfig({ settings, onChange, modelOptions }) {
-  return (
-    <section className="model-config">
-      <h2>Model Configuration</h2>
-      <div className="model-grid">
-        <ProviderModelFields settings={settings} onChange={onChange} modelOptions={modelOptions} />
-        <RuntimeFields settings={settings} onChange={onChange} />
-      </div>
-    </section>
-  );
-}
-
-function SettingsFields({ settings, modelOptions }) {
-  return (
-    <>
-      <label>
-        Transcription engine
-        <input name="transcription_engine" defaultValue={settings.transcription_engine} readOnly />
-      </label>
-      <label>
-        Transcription model
-        <select name="transcription_model" defaultValue={settings.transcription_model}>
-          {modelOptions.transcription_models.map((model) => (
-            <option value={model.id} key={model.id}>
-              {model.id}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Diarization engine
-        <input name="diarization_engine" defaultValue={settings.diarization_engine} readOnly />
-      </label>
-      <label>
-        Diarization model
-        <select name="diarization_model" defaultValue={settings.diarization_model}>
-          {modelOptions.diarization_models.map((model) => (
-            <option value={model.id} key={model.id}>
-              {model.id}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Language
-        <input name="language" defaultValue={settings.language} placeholder="auto" />
-      </label>
-      <label>
-        Device
-        <select name="device" defaultValue={settings.device}>
-          <option value="auto">auto</option>
-          <option value="cpu">cpu</option>
-          <option value="cuda">cuda</option>
-        </select>
-      </label>
-      <label>
-        Compute type
-        <input name="compute_type" defaultValue={settings.compute_type} />
-      </label>
-      <label>
-        Batch size
-        <input name="batch_size" type="number" min="1" max="128" defaultValue={settings.batch_size} />
-      </label>
-      <label>
-        Speaker count
-        <input name="speaker_count" type="number" min="1" max="20" defaultValue={settings.speaker_count} />
-      </label>
-      <label>
-        Min speakers
-        <input name="min_speakers" type="number" min="1" max="20" defaultValue={settings.min_speakers} />
-      </label>
-      <label>
-        Max speakers
-        <input name="max_speakers" type="number" min="1" max="20" defaultValue={settings.max_speakers} />
-      </label>
-    </>
-  );
-}
-
-function TranscriptReview({
-  job,
-  speakers,
-  sentences,
-  speakerTurns,
-  viewMode,
-  setViewMode,
-  onPlay,
-  onRenameSpeaker,
-  onUpdateSentence,
-}) {
-  return (
-    <div className="review">
-      <div className="review-header">
-        <div className="segmented">
-          <button className={viewMode === "sentences" ? "active" : ""} onClick={() => setViewMode("sentences")}>
-            Sentences
-          </button>
-          <button className={viewMode === "turns" ? "active" : ""} onClick={() => setViewMode("turns")}>
-            Speaker turns
-          </button>
-        </div>
-        <a className="export-link" href={`${API_BASE}/api/jobs/${job.id}/export.vtt`}>
-          <Download size={16} /> Export VTT
-        </a>
-      </div>
-
-      <section className="speaker-list">
-        {speakers.map((speaker) => (
-          <div className="speaker-row" key={speaker.id}>
-            <button
-              type="button"
-              aria-label={`Play sample for ${speaker.display_name}`}
-              onClick={() => onPlay(speaker.sample_start, speaker.sample_end)}
-            >
-              <Play size={15} />
-            </button>
-            <code>{speaker.speaker_key}</code>
-            <input
-              defaultValue={speaker.display_name}
-              onBlur={(event) => onRenameSpeaker(speaker, event.target.value)}
-            />
-            <small>
-              {formatTime(speaker.sample_start)}-{formatTime(speaker.sample_end)}
-            </small>
-          </div>
-        ))}
+      <section className={layoutMode}>
+        <LibraryPanel
+          audioItems={audioItems}
+          fileInputRef={fileInputRef}
+          filteredAudioItems={filteredAudioItems}
+          onFileInput={handleFileInput}
+          onProcessAudio={processSelectedAudio}
+          onSearch={setSearchQuery}
+          onSelectAudio={selectAudio}
+          searchQuery={searchQuery}
+          selectedAudio={selectedAudio}
+        />
+        <WorkspacePanel
+          audioRef={audioRef}
+          jobs={jobs}
+          onDeleteAudio={deleteAudio}
+          onOpenJob={openJob}
+          onPlay={playRange}
+          onProcessAudio={processSelectedAudio}
+          onRenameSpeaker={renameSpeaker}
+          onUpdateSentence={updateSentence}
+          onUpdateTitle={updateTitle}
+          selectedAudio={selectedAudio}
+          selectedJob={selectedJob}
+          sentences={sentences}
+          setSelectedAudio={setSelectedAudio}
+          setViewMode={setViewMode}
+          speakerTurns={speakerTurns}
+          speakers={speakers}
+          viewMode={viewMode}
+        />
       </section>
 
-      {viewMode === "sentences" ? (
-        <SentenceList sentences={sentences} onPlay={onPlay} onUpdateSentence={onUpdateSentence} />
-      ) : (
-        <div className="turn-list">
-          {speakerTurns.map((turn) => (
-            <section className="turn" key={`${turn.speaker_id}-${turn.start_time}`}>
-              <header>
-                <strong>{turn.speaker_display_name}</strong>
-                <span>
-                  {formatTime(turn.start_time)}-{formatTime(turn.end_time)}
-                </span>
-              </header>
-              <SentenceList sentences={turn.sentences} onPlay={onPlay} onUpdateSentence={onUpdateSentence} />
-            </section>
-          ))}
+      {isDraggingUpload && (
+        <div className="page-drop-overlay" aria-hidden="true">
+          <div>Drop audio to import</div>
         </div>
       )}
-    </div>
-  );
-}
 
-function SentenceList({ sentences, onPlay, onUpdateSentence }) {
-  return (
-    <div className="sentence-list">
-      {sentences.map((sentence) => (
-        <article className="sentence-row" key={sentence.id}>
-          <button
-            type="button"
-            aria-label={`Play sentence ${sentence.sentence_index ?? sentence.id}`}
-            onClick={() => onPlay(sentence.start_time, sentence.end_time)}
-          >
-            <Play size={15} />
-          </button>
-          <span className="timestamp">
-            {formatTime(sentence.start_time)}-{formatTime(sentence.end_time)}
-          </span>
-          <strong>{sentence.speaker_display_name}</strong>
-          <textarea
-            defaultValue={sentence.current_text}
-            onBlur={(event) => onUpdateSentence(sentence, event.target.value)}
-          />
-        </article>
-      ))}
-    </div>
+      {isUploadModalOpen && <UploadModal onClose={closeUploadModal} onUpload={uploadAudio} selectedFile={selectedFile} />}
+      {isSettingsOpen && (
+        <SettingsModal
+          jobSettings={jobSettings}
+          modelOptions={modelOptions}
+          onChangeJobSetting={updateJobSetting}
+          onClose={() => setIsSettingsOpen(false)}
+          onSaveSettings={saveSettings}
+          settings={settings}
+        />
+      )}
+    </main>
   );
 }
 

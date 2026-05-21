@@ -1,0 +1,133 @@
+@media (max-width: 1180px) {
+  .layout--active {
+    grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
+  }
+
+  .settings-modal form {
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .topbar {
+    align-items: flex-start;
+    border-radius: 0 0 24px 24px;
+    flex-direction: column;
+    position: relative;
+  }
+
+  .topbar p {
+    grid-column: 1 / -1;
+  }
+
+  .topbar-actions {
+    align-self: stretch;
+    justify-content: space-between;
+  }
+
+  .layout,
+  .layout--active,
+  .layout--library {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace {
+    opacity: 1;
+    overflow-y: auto;
+    pointer-events: auto;
+    transform: none;
+  }
+
+  .audio-header,
+  .review-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .toolbar,
+  .segmented,
+  .review-header .export-link {
+    width: 100%;
+  }
+
+  .toolbar button,
+  .segmented button,
+  .review-header .export-link {
+    flex: 1 1 9rem;
+  }
+
+  .sentence-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .sentence-row strong,
+  .sentence-row textarea {
+    grid-column: 1 / -1;
+  }
+
+  .turn {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .turn header strong,
+  .turn header span,
+  .turn-textbox {
+    grid-column: 1 / -1;
+  }
+
+  .settings-modal,
+  .upload-modal {
+    justify-self: center;
+  }
+
+  .settings-modal form {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .brand-lockup {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-mark {
+    height: 2.8rem;
+    width: 2.8rem;
+  }
+
+  .topbar h1 {
+    font-size: clamp(2.2rem, 14vw, 3.4rem);
+  }
+
+  .library-row,
+  .speaker-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .speaker-row input {
+    grid-column: 1 / -1;
+  }
+
+  .speaker-row code {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
+
+  button:hover,
+  .export-link:hover,
+  .drop-zone.dragging,
+  .sentence-row:focus-within,
+  .workspace,
+  .layout--library .sidebar {
+    transform: none !important;
+  }
+}
