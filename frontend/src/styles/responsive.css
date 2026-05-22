@@ -148,8 +148,7 @@
     grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .turn header strong,
-  .turn header span,
+  .turn-meta,
   .turn-textbox {
     grid-column: 1 / -1;
   }
@@ -160,6 +159,10 @@
   }
 
   .settings-modal form {
+    grid-template-columns: 1fr;
+  }
+
+  .recording-settings {
     grid-template-columns: 1fr;
   }
 }

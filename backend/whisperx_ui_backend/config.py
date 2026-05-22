@@ -49,3 +49,7 @@ def get_config() -> AppConfig:
     config.ensure_directories()
     return config
 
+
+def is_debug_enabled() -> bool:
+    value = os.environ.get("WHISPERX_UI_DEBUG", "").strip().lower()
+    return value in {"1", "true", "yes", "on", "debug"}

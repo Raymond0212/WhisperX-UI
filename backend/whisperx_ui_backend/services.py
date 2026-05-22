@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import mimetypes
 import re
 import sqlite3
@@ -30,6 +31,8 @@ from .processors.faster_whisper_processor import transcribe_with_faster_whisper
 from .processors.pyannote_diarization import diarize_with_pyannote
 from .processors.speaker_assignment import assign_speakers
 from .schemas import JobCreate, ModelPrepareRequest
+
+logger = logging.getLogger(__name__)
 
 
 def utc_now() -> str:
@@ -281,15 +284,45 @@ class AudioService:
             result["latest_job_status"] = result["latest_job_status"]["status"]
         return self._reconcile_audio_record(result)
 
-    def update_title(self, audio_id: str, display_title: str) -> dict[str, Any]:
+    def update_audio(self, audio_id: str, update: dict[str, Any]) -> dict[str, Any]:
+        if (
+            update.get("speaker_count") is not None
+            and update.get("min_speakers") is not None
+            and update["min_speakers"] > update["speaker_count"]
+        ):
+            raise HTTPException(status_code=400, detail="min_speakers cannot be greater than speaker_count")
+        if (
+            update.get("speaker_count") is not None
+            and update.get("max_speakers") is not None
+            and update["max_speakers"] < update["speaker_count"]
+        ):
+            raise HTTPException(status_code=400, detail="max_speakers cannot be less than speaker_count")
+        if (
+            update.get("min_speakers") is not None
+            and update.get("max_speakers") is not None
+            and update["min_speakers"] > update["max_speakers"]
+        ):
+            raise HTTPException(status_code=400, detail="min_speakers cannot be greater than max_speakers")
+
+        if not update:
+            return self.get_audio(audio_id)
+
+        fields: list[str] = []
+        values: list[Any] = []
+        if "display_title" in update:
+            if not isinstance(update.get("display_title"), str) or not update["display_title"].strip():
+                raise HTTPException(status_code=400, detail="display_title must be a non-empty string")
+            fields.append("display_title = ?")
+            values.append(update["display_title"].strip())
+        for key in ("speaker_count", "min_speakers", "max_speakers"):
+            if key in update:
+                fields.append(f"{key} = ?")
+                values.append(update.get(key))
+
         with transaction(self.connection):
             cursor = self.connection.execute(
-                """
-                UPDATE audio_files
-                SET display_title = ?
-                WHERE id = ? AND deleted_at IS NULL
-                """,
-                (display_title.strip(), audio_id),
+                f"UPDATE audio_files SET {', '.join(fields)} WHERE id = ? AND deleted_at IS NULL",
+                (*values, audio_id),
             )
             if cursor.rowcount == 0:
                 raise HTTPException(status_code=404, detail="Audio file not found")
@@ -359,6 +392,16 @@ class JobService:
 
     def create_and_run(self, request: JobCreate) -> dict[str, Any]:
         audio_row = AudioService(self.connection, self.config).get_audio(request.audio_file_id)
+        audio_path = str(audio_row.get("file_path") or "")
+        logger.info(
+            "Starting transcription job audio_id=%s model=%s diarization_model=%s device=%s compute_type=%s audio_path=%s",
+            request.audio_file_id,
+            request.transcription_model,
+            request.diarization_model,
+            request.device,
+            request.compute_type,
+            audio_path,
+        )
 
         job_id = str(uuid.uuid4())
         now = utc_now()
@@ -433,6 +476,12 @@ class JobService:
         try:
             create_processor(self.connection, self.config, dict(audio_row), request).run(job_id)
         except Exception as exc:
+            logger.exception(
+                "Transcription job failed job_id=%s audio_id=%s audio_path=%s",
+                job_id,
+                request.audio_file_id,
+                audio_path,
+            )
             with transaction(self.connection):
                 self.connection.execute(
                     """
@@ -442,6 +491,8 @@ class JobService:
                     """,
                     (str(exc), utc_now(), job_id),
                 )
+        else:
+            logger.info("Transcription job completed job_id=%s", job_id)
         return self.get_job(job_id)
 
     def get_job(self, job_id: str) -> dict[str, Any]:
@@ -458,6 +509,16 @@ class JobService:
             result["diarization_engine"] = result["diarization_provider"]
         result["settings"] = decode_json(result.pop("settings_json"), {})
         return result
+
+    def delete_job(self, job_id: str) -> None:
+        with transaction(self.connection):
+            row = self.connection.execute(
+                "SELECT id, status FROM transcription_jobs WHERE id = ?",
+                (job_id,),
+            ).fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail="Job not found")
+            self.connection.execute("DELETE FROM transcription_jobs WHERE id = ?", (job_id,))
 
     def list_jobs_for_audio(self, audio_id: str) -> list[dict[str, Any]]:
         rows = self.connection.execute(
@@ -810,12 +871,20 @@ class FasterWhisperProcessor:
 
     def run(self, job_id: str) -> None:
         audio_path = self.audio["file_path"]
+        logger.debug("Processor run start job_id=%s audio_path=%s", job_id, audio_path)
         transcription_model = validate_transcription_model(
             self.request.transcription_model or DEFAULT_TRANSCRIPTION_MODEL
         )
+        model_reference = resolve_transcription_model_reference(self.config, transcription_model)
+        logger.debug(
+            "Resolved transcription model reference job_id=%s model_key=%s model_reference=%s",
+            job_id,
+            transcription_model,
+            model_reference,
+        )
         result = transcribe_with_faster_whisper(
             audio_path=audio_path,
-            model_id=resolve_transcription_model_reference(self.config, transcription_model),
+            model_id=model_reference,
             device=self.request.device,
             compute_type=self.request.compute_type,
             language=self.request.language,
@@ -826,6 +895,7 @@ class FasterWhisperProcessor:
             "hf_token"
         )
         if diarization_token:
+            logger.debug("Diarization enabled job_id=%s", job_id)
             diarization_model = validate_diarization_model(
                 self.request.diarization_model or DEFAULT_DIARIZATION_MODEL
             )
@@ -839,9 +909,11 @@ class FasterWhisperProcessor:
             )
             result["segments"] = assign_speakers(result.get("segments", []), speaker_segments)
         else:
+            logger.debug("Diarization token missing, applying single-speaker fallback job_id=%s", job_id)
             result["segments"] = _assign_single_speaker(result.get("segments", []))
 
         segments = result.get("segments", [])
+        logger.debug("Transcription segments prepared job_id=%s segment_count=%s", job_id, len(segments))
         if not segments:
             self.writer.persist(job_id, [])
             return

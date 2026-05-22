@@ -6,8 +6,10 @@ import { TranscriptReview } from "./TranscriptReview.jsx";
 export function WorkspacePanel({
   audioRef,
   onDeleteAudio,
+  onDeleteTranscript,
   onPlay,
   onProcessAudio,
+  onUpdateRecordingSettings,
   onRenameSpeaker,
   onUpdateSentence,
   onUpdateTitle,
@@ -68,9 +70,15 @@ export function WorkspacePanel({
               <button type="button" onClick={() => onProcessAudio()}>
                 <Play size={16} /> {selectedAudio.latest_job_status === "completed" ? "Reprocess" : "Process"}
               </button>
-              <button type="button" onClick={() => onDeleteAudio(selectedAudio)}>
-                <Trash2 size={16} /> Delete
-              </button>
+              {selectedJob ? (
+                <button type="button" onClick={() => onDeleteTranscript(selectedJob)}>
+                  <Trash2 size={16} /> Delete Transcript
+                </button>
+              ) : (
+                <button type="button" onClick={() => onDeleteAudio(selectedAudio)}>
+                  <Trash2 size={16} /> Delete Audio
+                </button>
+              )}
             </div>
           </div>
 
@@ -81,6 +89,7 @@ export function WorkspacePanel({
           )}
 
           <CustomAudioPlayer audioRef={audioRef} src={`${API_BASE}/api/audio/${selectedAudio.id}/stream`} />
+          <RecordingDiarizationSettings selectedAudio={selectedAudio} onUpdateRecordingSettings={onUpdateRecordingSettings} />
 
           {selectedJob?.status === "failed" && <p className="error">{selectedJob.error_message}</p>}
           {selectedJob?.status === "completed" && (
@@ -104,6 +113,64 @@ export function WorkspacePanel({
         </div>
       )}
     </section>
+  );
+}
+
+function RecordingDiarizationSettings({ selectedAudio, onUpdateRecordingSettings }) {
+  const [values, setValues] = React.useState({
+    speaker_count: selectedAudio.speaker_count ?? "",
+    min_speakers: selectedAudio.min_speakers ?? "",
+    max_speakers: selectedAudio.max_speakers ?? "",
+  });
+
+  React.useEffect(() => {
+    setValues({
+      speaker_count: selectedAudio.speaker_count ?? "",
+      min_speakers: selectedAudio.min_speakers ?? "",
+      max_speakers: selectedAudio.max_speakers ?? "",
+    });
+  }, [selectedAudio.id, selectedAudio.speaker_count, selectedAudio.min_speakers, selectedAudio.max_speakers]);
+
+  function handleBlur() {
+    onUpdateRecordingSettings(selectedAudio, values);
+  }
+
+  return (
+    <div className="recording-settings" aria-label="Recording diarization settings">
+      <label>
+        Speaker count
+        <input
+          type="number"
+          min="1"
+          max="20"
+          value={values.speaker_count}
+          onChange={(event) => setValues((current) => ({ ...current, speaker_count: event.target.value }))}
+          onBlur={handleBlur}
+        />
+      </label>
+      <label>
+        Min speakers
+        <input
+          type="number"
+          min="1"
+          max="20"
+          value={values.min_speakers}
+          onChange={(event) => setValues((current) => ({ ...current, min_speakers: event.target.value }))}
+          onBlur={handleBlur}
+        />
+      </label>
+      <label>
+        Max speakers
+        <input
+          type="number"
+          min="1"
+          max="20"
+          value={values.max_speakers}
+          onChange={(event) => setValues((current) => ({ ...current, max_speakers: event.target.value }))}
+          onBlur={handleBlur}
+        />
+      </label>
+    </div>
   );
 }
 

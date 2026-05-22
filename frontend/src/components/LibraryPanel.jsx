@@ -106,7 +106,12 @@ function LibraryRow({ audio, isActive, jobs, onOpenJob, onProcessAudio, onSelect
         <div className="library-job-list" aria-label={`Processing history for ${audio.display_title}`}>
           {jobs.map((job, index) => (
             <button type="button" key={job.id} className="library-job-pill" onClick={() => onOpenJob(job)}>
-              Run {jobs.length - index} · {job.status}
+              <span>Run {jobs.length - index} · {job.transcription_model}</span>
+              {job.status === "processing" ? (
+                <LoaderCircle size={14} className="library-job-status processing" aria-label="Processing" />
+              ) : job.status === "completed" ? (
+                <Check size={14} className="library-job-status completed" aria-label="Completed" />
+              ) : null}
             </button>
           ))}
         </div>

@@ -161,11 +161,20 @@
   box-shadow: none;
   color: var(--graphite-soft);
   font-size: 0.74rem;
-  justify-content: flex-start;
+  justify-content: space-between;
   min-height: 1.7rem;
   padding: 0.26rem 0.62rem;
   text-transform: none;
   width: 100%;
+}
+
+.library-job-status.completed {
+  color: var(--success);
+}
+
+.library-job-status.processing {
+  animation: spin 900ms linear infinite;
+  color: var(--sea-deep);
 }
 
 .library-job-pill:hover,

@@ -158,6 +158,13 @@
   padding: 0.56rem 0.72rem;
 }
 
+.recording-settings {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 0.9rem;
+}
+
 .audio-control {
   align-items: center;
   color: var(--graphite-soft);

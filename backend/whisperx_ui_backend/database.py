@@ -35,6 +35,9 @@ def initialize_database(connection: sqlite3.Connection) -> None:
             mime_type TEXT,
             duration_seconds REAL,
             size_bytes INTEGER NOT NULL,
+            speaker_count INTEGER,
+            min_speakers INTEGER,
+            max_speakers INTEGER,
             created_at TEXT NOT NULL,
             deleted_at TEXT
         );
@@ -111,4 +114,10 @@ def initialize_database(connection: sqlite3.Connection) -> None:
             ON transcript_sentences(job_id, sentence_index);
         """
     )
+    audio_columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(audio_files)").fetchall()
+    }
+    for column_name in ("speaker_count", "min_speakers", "max_speakers"):
+        if column_name not in audio_columns:
+            connection.execute(f"ALTER TABLE audio_files ADD COLUMN {column_name} INTEGER")
     connection.commit()

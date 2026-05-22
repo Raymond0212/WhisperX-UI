@@ -27,6 +27,12 @@ The backend defaults to `app_data/` for SQLite, uploads, exports, logs, and mode
 WHISPERX_UI_APP_DATA=./app_data uv run uvicorn whisperx_ui_backend.app:app --app-dir backend --reload
 ```
 
+Enable verbose backend debugging (stack traces + transcription/diarization runtime context):
+
+```bash
+WHISPERX_UI_DEBUG=1 uv run uvicorn whisperx_ui_backend.app:app --app-dir backend --reload --log-level debug
+```
+
 ## Frontend
 
 ```bash

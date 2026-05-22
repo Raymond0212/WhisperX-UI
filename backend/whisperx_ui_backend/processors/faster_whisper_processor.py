@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -9,6 +10,8 @@ from ..model_registry import (
     DIARIZATION_ENGINE,
     TRANSCRIPTION_ENGINE,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -37,6 +40,15 @@ def transcribe_with_faster_whisper(
         ) from exc
 
     resolved_device = "cpu" if device == "auto" else device
+    logger.debug(
+        "faster-whisper transcribe start audio_path=%s model_id=%s device=%s compute_type=%s download_root=%s language=%s",
+        audio_path,
+        model_id,
+        resolved_device,
+        compute_type,
+        download_root,
+        language,
+    )
     model = WhisperModel(
         model_id,
         device=resolved_device,
@@ -67,7 +79,7 @@ def transcribe_with_faster_whisper(
             }
         )
 
-    return {
+    payload = {
         "transcription_engine": TRANSCRIPTION_ENGINE,
         "transcription_model": model_id or DEFAULT_TRANSCRIPTION_MODEL,
         "diarization_engine": DIARIZATION_ENGINE,
@@ -75,3 +87,10 @@ def transcribe_with_faster_whisper(
         "language": getattr(info, "language", language),
         "segments": normalized_segments,
     }
+    logger.debug(
+        "faster-whisper transcribe done model_id=%s language=%s segment_count=%s",
+        payload["transcription_model"],
+        payload["language"],
+        len(normalized_segments),
+    )
+    return payload

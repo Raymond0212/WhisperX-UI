@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def _load_waveform_for_pyannote(audio_path: str) -> dict[str, Any]:
@@ -11,24 +14,28 @@ def _load_waveform_for_pyannote(audio_path: str) -> dict[str, Any]:
 
     waveform = None
     sample_rate = None
-    try:
-        import torchaudio
 
-        try:
-            waveform, sample_rate = torchaudio.load(audio_path, backend="soundfile")
-        except Exception:
-            waveform, sample_rate = torchaudio.load(audio_path)
+    # Prefer faster-whisper decoding first: it is already required for the
+    # transcription path and avoids OS/runtime-specific torchcodec coupling.
+    try:
+        from faster_whisper.audio import decode_audio
+
+        decoded = decode_audio(audio_path)
+        waveform = torch.tensor(decoded, dtype=torch.float32).unsqueeze(0)
+        sample_rate = 16000
     except Exception:
-        # Fallback avoids torchaudio/torchcodec runtime coupling in constrained environments.
+        logger.debug("faster-whisper decode failed for %s; trying torchaudio fallback", audio_path)
         try:
-            from faster_whisper.audio import decode_audio
+            import torchaudio
+
+            try:
+                waveform, sample_rate = torchaudio.load(audio_path, backend="soundfile")
+            except Exception:
+                waveform, sample_rate = torchaudio.load(audio_path)
         except Exception as exc:
             raise RuntimeError(
                 "Unable to decode audio for pyannote diarization with torchaudio or faster-whisper."
             ) from exc
-        decoded = decode_audio(audio_path)
-        waveform = torch.tensor(decoded, dtype=torch.float32).unsqueeze(0)
-        sample_rate = 16000
 
     if waveform.ndim != 2:
         raise RuntimeError(f"Unexpected waveform shape for diarization input: {tuple(waveform.shape)}")
@@ -103,5 +110,13 @@ def diarize_with_pyannote(
         if value is not None
     }
     diarization_input = _load_waveform_for_pyannote(audio_path)
+    logger.debug(
+        "pyannote diarization start audio_path=%s model_id=%s kwargs=%s",
+        audio_path,
+        model_id,
+        kwargs,
+    )
     diarization = pipeline(diarization_input, **kwargs)
-    return _extract_intervals(diarization)
+    intervals = _extract_intervals(diarization)
+    logger.debug("pyannote diarization done interval_count=%s", len(intervals))
+    return intervals

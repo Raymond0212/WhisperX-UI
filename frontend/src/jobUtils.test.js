@@ -56,12 +56,6 @@ test("mergeJobSettings preserves defaults while normalizing empty optional field
     transcription_model: "custom",
     language: "",
   });
-  assert.deepEqual(mergeJobSettings({ speaker_count: null, min_speakers: 2, max_speakers: 4 }), {
-    ...DEFAULT_JOB_SETTINGS,
-    speaker_count: "",
-    min_speakers: 2,
-    max_speakers: 4,
-  });
 });
 
 test("normalizeJobSettings converts form settings into backend request values", () => {
@@ -74,9 +68,6 @@ test("normalizeJobSettings converts form settings into backend request values", 
     device: "auto",
     compute_type: "int8",
     batch_size: 8,
-    speaker_count: null,
-    min_speakers: null,
-    max_speakers: null,
   });
   assert.deepEqual(
     normalizeJobSettings({
@@ -88,9 +79,6 @@ test("normalizeJobSettings converts form settings into backend request values", 
       device: "cpu",
       compute_type: "float32",
       batch_size: "16",
-      speaker_count: "2",
-      min_speakers: "",
-      max_speakers: "4",
     }),
     {
       transcription_engine: "faster-whisper",
@@ -101,9 +89,6 @@ test("normalizeJobSettings converts form settings into backend request values", 
       device: "cpu",
       compute_type: "float32",
       batch_size: 16,
-      speaker_count: 2,
-      min_speakers: null,
-      max_speakers: 4,
     },
   );
 });
@@ -157,6 +142,28 @@ test("buildJobRequest sends transient diarization token only when provided", () 
     max_speakers: null,
     settings: { diarization_token: "hf-secret" },
   });
+
+  assert.deepEqual(
+    buildJobRequest(
+      "audio-4",
+      {},
+      { speaker_count: "2", min_speakers: "", max_speakers: "4" },
+    ),
+    {
+      audio_file_id: "audio-4",
+      transcription_engine: "faster-whisper",
+      transcription_model: "distil-large-v3",
+      diarization_engine: "huggingface-pyannote",
+      diarization_model: "pyannote/speaker-diarization-community-1",
+      language: null,
+      device: "auto",
+      compute_type: "int8",
+      batch_size: 8,
+      speaker_count: 2,
+      min_speakers: null,
+      max_speakers: 4,
+    },
+  );
 
   assert.equal("settings" in buildJobRequest("audio-3", { diarization_token: "   " }), false);
 });

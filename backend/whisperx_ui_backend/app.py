@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
@@ -8,7 +9,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse
 
-from .config import AppConfig, get_config
+from .config import AppConfig, get_config, is_debug_enabled
 from .database import connect, initialize_database
 from .schemas import (
     AudioFileOut,
@@ -37,7 +38,16 @@ from .services import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logging.basicConfig(
+        level=logging.DEBUG if is_debug_enabled() else logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
     config = get_config()
+    logging.getLogger(__name__).info(
+        "Backend startup debug=%s app_data_dir=%s",
+        is_debug_enabled(),
+        str(config.app_data_dir),
+    )
     connection = connect(config.database_path)
     initialize_database(connection)
     app.state.config = config
@@ -124,7 +134,7 @@ def update_audio(
     update: AudioUpdate,
     service: AudioService = Depends(audio_service),
 ):
-    return service.update_title(audio_id, update.display_title)
+    return service.update_audio(audio_id, update.model_dump(exclude_unset=True))
 
 
 @app.delete("/api/audio/{audio_id}", status_code=204)
@@ -165,6 +175,12 @@ def prepare_basic_models(
 @app.get("/api/jobs/{job_id}", response_model=JobOut)
 def get_job(job_id: str, service: JobService = Depends(job_service)):
     return service.get_job(job_id)
+
+
+@app.delete("/api/jobs/{job_id}", status_code=204)
+def delete_job(job_id: str, service: JobService = Depends(job_service)):
+    service.delete_job(job_id)
+    return None
 
 
 @app.get("/api/audio/{audio_id}/jobs", response_model=list[JobOut])

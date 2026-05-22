@@ -77,6 +77,7 @@ export function TranscriptReview({
         <SpeakerTurnList
           speakerTurns={speakerTurns}
           speakers={speakers}
+          onPlay={onPlay}
           onRenameSpeaker={onRenameSpeaker}
           onUpdateSentence={onUpdateSentence}
         />
@@ -145,19 +146,27 @@ function SpeakerLabelRow({ speaker, onPlay, onRenameSpeaker }) {
   );
 }
 
-function SpeakerTurnList({ speakerTurns, speakers, onRenameSpeaker, onUpdateSentence }) {
+function SpeakerTurnList({ speakerTurns, speakers, onPlay, onRenameSpeaker, onUpdateSentence }) {
   const [editingSentenceId, setEditingSentenceId] = useState(null);
   const speakersById = React.useMemo(() => new Map(speakers.map((speaker) => [speaker.id, speaker])), [speakers]);
   return (
     <div className="turn-list">
       {speakerTurns.map((turn) => (
         <section className="turn" key={`${turn.speaker_id}-${turn.start_time}`}>
-          <header>
+          <button
+            type="button"
+            className="round-play-button"
+            aria-label={`Play turn ${turn.speaker_display_name} ${formatTime(turn.start_time)}-${formatTime(turn.end_time)}`}
+            onClick={() => onPlay(turn.start_time, turn.end_time)}
+          >
+            <Play size={15} />
+          </button>
+          <div className="turn-meta">
             <InlineSpeakerName speaker={speakersById.get(turn.speaker_id)} fallbackName={turn.speaker_display_name} onRenameSpeaker={onRenameSpeaker} />
-            <span>
+            <span className="timestamp">
               {formatTime(turn.start_time)}-{formatTime(turn.end_time)}
             </span>
-          </header>
+          </div>
           <div className="turn-textbox" aria-label={`${turn.speaker_display_name} transcript turn`}>
             <p>
               {turn.sentences.map((sentence) => (

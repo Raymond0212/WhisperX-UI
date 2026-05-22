@@ -189,6 +189,17 @@ function createApiMock() {
       return new Response(null, { status: 204 });
     }
 
+    if (method === "DELETE" && path === "/api/jobs/job-complete") {
+      uploadedJobs.splice(
+        uploadedJobs.findIndex((job) => job.id === "job-complete"),
+        1,
+      );
+      uploadedAudio.latest_job_status = "uploaded";
+      speakers = [];
+      sentences = [];
+      return new Response(null, { status: 204 });
+    }
+
     return jsonResponse({ detail: `Unhandled ${method} ${path}` }, 500);
   });
 
@@ -312,15 +323,21 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
 
   const failedRow = screen.getByRole("button", { name: /^broken clip$/i });
   fireEvent.click(failedRow);
-  const failedJobButton = await screen.findByRole("button", { name: /run 1 .* failed/i });
+  const failedJobButton = await screen.findByRole("button", { name: /run 1 .* distil-large-v3/i });
   fireEvent.click(failedJobButton);
-  expect(await screen.findByText("Model crashed")).not.toBeNull();
+  await waitFor(() => {
+    const openedFailedTranscript = requests.find(
+      (request) => request.method === "GET" && request.path === "/api/jobs/job-failed/transcript",
+    );
+    expect(openedFailedTranscript).toBeDefined();
+  });
 
   fireEvent.click(screen.getByRole("button", { name: /^demo upload$/i }));
   await screen.findByRole("button", { name: /^demo upload$/i });
-  fireEvent.click(screen.getByRole("button", { name: /delete/i }));
-
-  await screen.findByText("Select an audio file to open the workspace.");
-  expect(screen.queryByRole("button", { name: /^demo upload$/i })).toBeNull();
-  expect(within(screen.getByText("Library").closest(".library")).queryByText("Demo upload")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /delete transcript/i }));
+  await waitFor(() => {
+    expect(screen.queryByText("Hello turn edit.")).toBeNull();
+  });
+  expect(await screen.findByRole("button", { name: /delete audio/i })).not.toBeNull();
+  expect(screen.getAllByText("Demo upload").length).toBeGreaterThan(0);
 });

@@ -7,9 +7,6 @@ export const DEFAULT_JOB_SETTINGS = {
   device: "auto",
   compute_type: "int8",
   batch_size: 8,
-  speaker_count: "",
-  min_speakers: "",
-  max_speakers: "",
 };
 
 export function formatTime(seconds) {
@@ -43,17 +40,10 @@ export function mergeJobSettings(settings) {
     ...DEFAULT_JOB_SETTINGS,
     ...settings,
     language: settings.language || "",
-    speaker_count: settings.speaker_count ?? "",
-    min_speakers: settings.min_speakers ?? "",
-    max_speakers: settings.max_speakers ?? "",
   };
 }
 
 export function normalizeJobSettings(settings) {
-  const numberOrNull = (value) => {
-    if (value === "" || value === null || value === undefined) return null;
-    return Number(value);
-  };
   return {
     transcription_engine: settings.transcription_engine || "faster-whisper",
     transcription_model: settings.transcription_model || "distil-large-v3",
@@ -64,9 +54,6 @@ export function normalizeJobSettings(settings) {
     device: settings.device || "auto",
     compute_type: settings.compute_type || "int8",
     batch_size: Number(settings.batch_size || 8),
-    speaker_count: numberOrNull(settings.speaker_count),
-    min_speakers: numberOrNull(settings.min_speakers),
-    max_speakers: numberOrNull(settings.max_speakers),
   };
 }
 
@@ -82,10 +69,17 @@ export function buildModelPrepareRequest(settings) {
   return request;
 }
 
-export function buildJobRequest(audioFileId, settings) {
+export function buildJobRequest(audioFileId, settings, perRecording = {}) {
+  const numberOrNull = (value) => {
+    if (value === "" || value === null || value === undefined) return null;
+    return Number(value);
+  };
   const request = {
     audio_file_id: audioFileId,
     ...normalizeJobSettings(settings),
+    speaker_count: numberOrNull(perRecording.speaker_count),
+    min_speakers: numberOrNull(perRecording.min_speakers),
+    max_speakers: numberOrNull(perRecording.max_speakers),
   };
   const diarizationToken = settings.diarization_token?.trim();
   if (diarizationToken) {

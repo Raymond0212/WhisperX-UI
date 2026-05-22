@@ -16,13 +16,19 @@ class AudioFileOut(BaseModel):
     mime_type: str | None = None
     duration_seconds: float | None = None
     size_bytes: int
+    speaker_count: int | None = None
+    min_speakers: int | None = None
+    max_speakers: int | None = None
     created_at: str
     deleted_at: str | None = None
     latest_job_status: str | None = None
 
 
 class AudioUpdate(BaseModel):
-    display_title: str = Field(min_length=1, max_length=200)
+    display_title: str | None = Field(default=None, min_length=1, max_length=200)
+    speaker_count: int | None = Field(default=None, ge=1, le=20)
+    min_speakers: int | None = Field(default=None, ge=1, le=20)
+    max_speakers: int | None = Field(default=None, ge=1, le=20)
 
 
 class JobCreate(BaseModel):

@@ -223,6 +223,21 @@ export function App() {
     await refreshLibrary();
   }
 
+  async function deleteTranscript(job) {
+    await api(`/api/jobs/${job.id}`, { method: "DELETE" });
+    setSelectedJob(null);
+    setSpeakers([]);
+    setSentences([]);
+    if (!selectedAudio) return;
+    const nextJobs = await api(`/api/audio/${selectedAudio.id}/jobs`);
+    setJobs(nextJobs);
+    const completed = nextJobs.find((item) => item.status === "completed");
+    if (completed) {
+      await openJob(completed);
+    }
+    await refreshLibrary();
+  }
+
   async function deleteAudio(audio) {
     await api(`/api/audio/${audio.id}`, { method: "DELETE" });
     setSelectedAudio(null);
@@ -230,6 +245,24 @@ export function App() {
     setJobs([]);
     setSpeakers([]);
     setSentences([]);
+    await refreshLibrary();
+  }
+
+  async function updateRecordingSettings(audio, values) {
+    const normalizeOptionalInt = (value) => {
+      if (value === "" || value === null || value === undefined) return null;
+      return Number(value);
+    };
+    const updated = await api(`/api/audio/${audio.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        speaker_count: normalizeOptionalInt(values.speaker_count),
+        min_speakers: normalizeOptionalInt(values.min_speakers),
+        max_speakers: normalizeOptionalInt(values.max_speakers),
+      }),
+    });
+    setSelectedAudio(updated);
     await refreshLibrary();
   }
 
@@ -252,7 +285,13 @@ export function App() {
     const job = await api("/api/jobs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(buildJobRequest(audioOverride.id, jobSettings)),
+      body: JSON.stringify(
+        buildJobRequest(audioOverride.id, jobSettings, {
+          speaker_count: audioOverride.speaker_count,
+          min_speakers: audioOverride.min_speakers,
+          max_speakers: audioOverride.max_speakers,
+        }),
+      ),
     });
     setJobs(await api(`/api/audio/${audioOverride.id}/jobs`));
     await openJob(job);
@@ -344,8 +383,10 @@ export function App() {
         <WorkspacePanel
           audioRef={audioRef}
           onDeleteAudio={deleteAudio}
+          onDeleteTranscript={deleteTranscript}
           onPlay={playRange}
           onProcessAudio={processSelectedAudio}
+          onUpdateRecordingSettings={updateRecordingSettings}
           onRenameSpeaker={renameSpeaker}
           onUpdateSentence={updateSentence}
           onUpdateTitle={updateTitle}
