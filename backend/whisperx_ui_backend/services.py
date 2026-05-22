@@ -257,7 +257,7 @@ class AudioService:
             ORDER BY a.created_at DESC
             """
         ).fetchall()
-        return [dict(row) for row in rows]
+        return [self._reconcile_audio_record(dict(row)) for row in rows]
 
     def get_audio(self, audio_id: str, *, include_deleted: bool = False) -> dict[str, Any]:
         query = "SELECT * FROM audio_files WHERE id = ?"
@@ -279,7 +279,7 @@ class AudioService:
         ).fetchone()
         if result["latest_job_status"] is not None:
             result["latest_job_status"] = result["latest_job_status"]["status"]
-        return result
+        return self._reconcile_audio_record(result)
 
     def update_title(self, audio_id: str, display_title: str) -> dict[str, Any]:
         with transaction(self.connection):
@@ -311,16 +311,45 @@ class AudioService:
 
     def stream_info(self, audio_id: str) -> tuple[Path, str]:
         audio = self.get_audio(audio_id)
-        path = Path(audio["file_path"]).expanduser().resolve()
+        path = self._resolved_audio_path(audio)
+        if path is None:
+            raise HTTPException(status_code=404, detail="Stored audio file is missing")
         uploads_dir = self.config.uploads_dir.resolve()
         try:
             path.relative_to(uploads_dir)
         except ValueError as exc:
             raise HTTPException(status_code=500, detail="Stored audio path is invalid") from exc
-        if not path.exists():
-            raise HTTPException(status_code=404, detail="Stored audio file is missing")
         media_type = infer_audio_content_type(path.name, audio["mime_type"])
         return path, media_type
+
+    def _reconcile_audio_record(self, audio: dict[str, Any]) -> dict[str, Any]:
+        path = self._resolved_audio_path(audio)
+        if path is None:
+            return audio
+        resolved_path = str(path)
+        if resolved_path != audio["file_path"]:
+            with transaction(self.connection):
+                self.connection.execute(
+                    "UPDATE audio_files SET file_path = ? WHERE id = ?",
+                    (resolved_path, audio["id"]),
+                )
+            audio["file_path"] = resolved_path
+        return audio
+
+    def _resolved_audio_path(self, audio: dict[str, Any]) -> Path | None:
+        uploads_dir = self.config.uploads_dir.resolve()
+        stored_filename = audio.get("stored_filename")
+        if isinstance(stored_filename, str) and stored_filename:
+            candidate = (uploads_dir / stored_filename).resolve()
+            if candidate.exists():
+                return candidate
+
+        raw_path = audio.get("file_path")
+        if isinstance(raw_path, str) and raw_path:
+            legacy_path = Path(raw_path).expanduser().resolve()
+            if legacy_path.exists():
+                return legacy_path
+        return None
 
 
 class JobService:
@@ -329,12 +358,7 @@ class JobService:
         self.config = config
 
     def create_and_run(self, request: JobCreate) -> dict[str, Any]:
-        audio_row = self.connection.execute(
-            "SELECT * FROM audio_files WHERE id = ? AND deleted_at IS NULL",
-            (request.audio_file_id,),
-        ).fetchone()
-        if audio_row is None:
-            raise HTTPException(status_code=404, detail="Audio file not found")
+        audio_row = AudioService(self.connection, self.config).get_audio(request.audio_file_id)
 
         job_id = str(uuid.uuid4())
         now = utc_now()

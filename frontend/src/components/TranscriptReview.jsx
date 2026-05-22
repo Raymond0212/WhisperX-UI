@@ -17,6 +17,25 @@ export function TranscriptReview({
   const [isSpeakerPanelOpen, setIsSpeakerPanelOpen] = useState(true);
   return (
     <div className="review">
+      <section className={`speaker-panel ${isSpeakerPanelOpen ? "open" : ""}`}>
+        <button
+          type="button"
+          className="speaker-panel-toggle"
+          aria-expanded={isSpeakerPanelOpen}
+          onClick={() => setIsSpeakerPanelOpen((current) => !current)}
+        >
+          <span>Speaker labels</span>
+          <ChevronDown size={17} aria-hidden="true" />
+        </button>
+        {isSpeakerPanelOpen && (
+          <div className="speaker-list">
+            {speakers.map((speaker) => (
+              <SpeakerLabelRow key={speaker.id} speaker={speaker} onPlay={onPlay} onRenameSpeaker={onRenameSpeaker} />
+            ))}
+          </div>
+        )}
+      </section>
+
       <div className="review-header">
         <div className="segmented" role="group" aria-label="Transcript view">
           <button
@@ -46,29 +65,21 @@ export function TranscriptReview({
         </button>
       </div>
 
-      <section className={`speaker-panel ${isSpeakerPanelOpen ? "open" : ""}`}>
-        <button
-          type="button"
-          className="speaker-panel-toggle"
-          aria-expanded={isSpeakerPanelOpen}
-          onClick={() => setIsSpeakerPanelOpen((current) => !current)}
-        >
-          <span>Speaker labels</span>
-          <ChevronDown size={17} aria-hidden="true" />
-        </button>
-        {isSpeakerPanelOpen && (
-          <div className="speaker-list">
-            {speakers.map((speaker) => (
-              <SpeakerLabelRow key={speaker.id} speaker={speaker} onPlay={onPlay} onRenameSpeaker={onRenameSpeaker} />
-            ))}
-          </div>
-        )}
-      </section>
-
       {viewMode === "sentences" ? (
-        <SentenceList sentences={sentences} onPlay={onPlay} onUpdateSentence={onUpdateSentence} />
+        <SentenceList
+          sentences={sentences}
+          speakers={speakers}
+          onPlay={onPlay}
+          onRenameSpeaker={onRenameSpeaker}
+          onUpdateSentence={onUpdateSentence}
+        />
       ) : (
-        <SpeakerTurnList speakerTurns={speakerTurns} onUpdateSentence={onUpdateSentence} />
+        <SpeakerTurnList
+          speakerTurns={speakerTurns}
+          speakers={speakers}
+          onRenameSpeaker={onRenameSpeaker}
+          onUpdateSentence={onUpdateSentence}
+        />
       )}
     </div>
   );
@@ -121,7 +132,12 @@ function SpeakerLabelRow({ speaker, onPlay, onRenameSpeaker }) {
           {speaker.display_name}
         </span>
       ) : (
-        <button type="button" className="speaker-name" onClick={() => setIsEditing(true)}>
+        <button
+          type="button"
+          className="speaker-name"
+          aria-label={`Edit display name for ${speaker.speaker_key}`}
+          onClick={() => setIsEditing(true)}
+        >
           {speaker.display_name}
         </button>
       )}
@@ -129,14 +145,15 @@ function SpeakerLabelRow({ speaker, onPlay, onRenameSpeaker }) {
   );
 }
 
-function SpeakerTurnList({ speakerTurns, onUpdateSentence }) {
+function SpeakerTurnList({ speakerTurns, speakers, onRenameSpeaker, onUpdateSentence }) {
   const [editingSentenceId, setEditingSentenceId] = useState(null);
+  const speakersById = React.useMemo(() => new Map(speakers.map((speaker) => [speaker.id, speaker])), [speakers]);
   return (
     <div className="turn-list">
       {speakerTurns.map((turn) => (
         <section className="turn" key={`${turn.speaker_id}-${turn.start_time}`}>
           <header>
-            <strong>{turn.speaker_display_name}</strong>
+            <InlineSpeakerName speaker={speakersById.get(turn.speaker_id)} fallbackName={turn.speaker_display_name} onRenameSpeaker={onRenameSpeaker} />
             <span>
               {formatTime(turn.start_time)}-{formatTime(turn.end_time)}
             </span>
@@ -220,8 +237,9 @@ function EditableTurnSentence({ sentence, isEditing, onEdit, onCancel, onUpdateS
   );
 }
 
-function SentenceList({ sentences, onPlay, onUpdateSentence }) {
+function SentenceList({ sentences, speakers, onPlay, onRenameSpeaker, onUpdateSentence }) {
   const [editingSentenceId, setEditingSentenceId] = useState(null);
+  const speakersById = React.useMemo(() => new Map(speakers.map((speaker) => [speaker.id, speaker])), [speakers]);
 
   return (
     <div className="sentence-list">
@@ -236,7 +254,11 @@ function SentenceList({ sentences, onPlay, onUpdateSentence }) {
             <Play size={15} />
           </button>
           <div className="sentence-meta">
-            <strong>{sentence.speaker_display_name}</strong>
+            <InlineSpeakerName
+              speaker={speakersById.get(sentence.speaker_id)}
+              fallbackName={sentence.speaker_display_name}
+              onRenameSpeaker={onRenameSpeaker}
+            />
             <span className="timestamp">
               {formatTime(sentence.start_time)}-{formatTime(sentence.end_time)}
             </span>
@@ -251,5 +273,53 @@ function SentenceList({ sentences, onPlay, onUpdateSentence }) {
         </article>
       ))}
     </div>
+  );
+}
+
+function InlineSpeakerName({ speaker, fallbackName, onRenameSpeaker }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const editorRef = useRef(null);
+  const displayName = speaker?.display_name || fallbackName;
+
+  useEffect(() => {
+    if (!isEditing) return;
+    editorRef.current?.focus();
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(editorRef.current);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }, [isEditing]);
+
+  async function saveName(event) {
+    setIsEditing(false);
+    if (!speaker) return;
+    const nextName = event.currentTarget.textContent.trim() || speaker.speaker_key;
+    if (nextName !== speaker.display_name) {
+      await onRenameSpeaker(speaker, nextName);
+    }
+  }
+
+  if (isEditing) {
+    return (
+      <span
+        ref={editorRef}
+        className="speaker-name speaker-name--editing"
+        role="textbox"
+        contentEditable
+        suppressContentEditableWarning
+        aria-label={`Display name for ${speaker?.speaker_key || displayName}`}
+        onBlur={saveName}
+      >
+        {displayName}
+      </span>
+    );
+  }
+
+  return (
+    <button type="button" className="speaker-name inline-speaker-name" onClick={() => setIsEditing(true)}>
+      {displayName}
+    </button>
   );
 }

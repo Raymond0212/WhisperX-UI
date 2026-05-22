@@ -275,7 +275,7 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   fireEvent.timeUpdate(player);
   expect(pause).toHaveBeenCalledTimes(2);
 
-  fireEvent.click(screen.getByRole("button", { name: "SPEAKER_00" }));
+  fireEvent.click(screen.getByRole("button", { name: /edit display name for speaker_00/i }));
   const speakerNameInput = screen.getByRole("textbox", { name: /display name for speaker_00/i });
   speakerNameInput.textContent = "Alice";
   fireEvent.blur(speakerNameInput);

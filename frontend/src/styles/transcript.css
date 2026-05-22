@@ -118,7 +118,7 @@
 }
 
 .round-play-button,
-.sentence-row button {
+.sentence-row > .round-play-button {
   aspect-ratio: 1;
   align-self: center;
   background: transparent;
@@ -132,9 +132,9 @@
 }
 
 .round-play-button:hover,
-.sentence-row button:hover,
+.sentence-row > .round-play-button:hover,
 .round-play-button:focus-visible,
-.sentence-row button:focus-visible {
+.sentence-row > .round-play-button:focus-visible {
   background: rgba(95, 185, 173, 0.18);
   box-shadow: none;
   transform: none;
@@ -150,7 +150,7 @@
   grid-column: 2;
 }
 
-.speaker-name {
+.speaker-row .speaker-name {
   background: transparent;
   border: 0;
   box-shadow: none;
@@ -164,8 +164,8 @@
   white-space: normal;
 }
 
-.speaker-name:hover,
-.speaker-name:focus-visible {
+.speaker-row .speaker-name:hover,
+.speaker-row .speaker-name:focus-visible {
   background: rgba(95, 185, 173, 0.18);
   box-shadow: none;
   color: var(--ink);
@@ -177,6 +177,26 @@
   border-radius: 7px;
   box-shadow: 0 0 0 3px rgba(95, 185, 173, 0.2);
   outline: 0;
+}
+
+.inline-speaker-name {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  box-shadow: none;
+  color: var(--ink);
+  font-weight: 800;
+  justify-content: flex-start;
+  min-height: 0;
+  padding: 0.06rem 0.22rem;
+  text-align: left;
+}
+
+.inline-speaker-name:hover,
+.inline-speaker-name:focus-visible {
+  background: rgba(95, 185, 173, 0.18);
+  box-shadow: none;
+  transform: none;
 }
 
 .sentence-row {

@@ -45,6 +45,11 @@
   flex: 1;
   gap: 0.35rem;
   min-width: 0;
+  overflow: hidden;
+}
+
+.audio-header .title-field > * {
+  min-width: 0;
 }
 
 .audio-header input {
@@ -68,8 +73,12 @@
   font-weight: 850;
   justify-content: flex-start;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
   padding: 0.22rem 0.5rem;
   text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .title-display:hover,
@@ -135,12 +144,62 @@
   opacity: 0.3;
 }
 
-audio {
+.custom-audio-player {
+  align-items: center;
+  backdrop-filter: blur(8px) saturate(1.05);
+  background: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.42);
   border-radius: 18px;
-  display: block;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  display: grid;
+  gap: 0.68rem;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   margin-bottom: 0.9rem;
-  padding: 0.45rem;
+  padding: 0.56rem 0.72rem;
+}
+
+.audio-control {
+  align-items: center;
+  color: var(--graphite-soft);
+  display: inline-flex;
+  justify-content: center;
+}
+
+.audio-control--play {
+  aspect-ratio: 1;
+  background: rgba(255, 255, 255, 0.34);
+  border: 1px solid rgba(255, 255, 255, 0.44);
+  border-radius: 999px;
+  box-shadow: none;
+  min-height: 2rem;
+  padding: 0;
+  width: 2rem;
+}
+
+.audio-control--play:hover,
+.audio-control--play:focus-visible {
+  background: rgba(95, 185, 173, 0.2);
+  box-shadow: none;
+  transform: none;
+}
+
+.audio-time {
+  color: var(--graphite-soft);
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.audio-seek {
+  accent-color: rgba(31, 119, 113, 0.88);
   width: 100%;
+}
+
+.audio-control--volume {
+  opacity: 0.68;
+}
+
+.native-audio-element {
+  display: none;
 }
 
 .empty-state,
