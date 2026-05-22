@@ -256,7 +256,7 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   });
   expect(screen.getByText(/Local model ready/)).not.toBeNull();
 
-  expect(await screen.findByDisplayValue("Hello world.")).not.toBeNull();
+  expect(await screen.findByText("Hello world.")).not.toBeNull();
   expect(screen.getByRole("button", { name: /export vtt/i }).dataset.exportUrl).toBe(
     `${API_BASE}/api/jobs/job-complete/export.vtt`,
   );
@@ -284,8 +284,9 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   const speakerPatch = requests.find((request) => request.method === "PATCH" && request.path === "/api/speakers/speaker-1");
   expect(JSON.parse(speakerPatch.options.body)).toEqual({ display_name: "Alice" });
 
-  const sentenceText = screen.getByDisplayValue("Hello world.");
-  fireEvent.change(sentenceText, { target: { value: "Hello edited." } });
+  fireEvent.click(screen.getByRole("button", { name: /edit sentence sentence-1/i }));
+  const sentenceText = screen.getByRole("textbox", { name: /transcript sentence sentence-1/i });
+  sentenceText.textContent = "Hello edited.";
   fireEvent.blur(sentenceText);
 
   await waitFor(() => {
@@ -311,15 +312,15 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
 
   const failedRow = screen.getByRole("button", { name: /^broken clip$/i });
   fireEvent.click(failedRow);
-  const failedJobButton = await screen.findByRole("button", { name: /failed .* distil-large-v3/i });
+  const failedJobButton = await screen.findByRole("button", { name: /run 1 .* failed/i });
   fireEvent.click(failedJobButton);
   expect(await screen.findByText("Model crashed")).not.toBeNull();
 
   fireEvent.click(screen.getByRole("button", { name: /^demo upload$/i }));
-  await screen.findByDisplayValue("Demo upload");
+  await screen.findByRole("button", { name: /^demo upload$/i });
   fireEvent.click(screen.getByRole("button", { name: /delete/i }));
 
   await screen.findByText("Select an audio file to open the workspace.");
-  expect(screen.queryByDisplayValue("Demo upload")).toBeNull();
+  expect(screen.queryByRole("button", { name: /^demo upload$/i })).toBeNull();
   expect(within(screen.getByText("Library").closest(".library")).queryByText("Demo upload")).toBeNull();
 });

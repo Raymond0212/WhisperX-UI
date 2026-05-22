@@ -5,9 +5,7 @@ import { TranscriptReview } from "./TranscriptReview.jsx";
 
 export function WorkspacePanel({
   audioRef,
-  jobs,
   onDeleteAudio,
-  onOpenJob,
   onPlay,
   onProcessAudio,
   onRenameSpeaker,
@@ -22,6 +20,19 @@ export function WorkspacePanel({
   speakers,
   viewMode,
 }) {
+  const [isEditingTitle, setIsEditingTitle] = React.useState(false);
+  const titleInputRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!isEditingTitle) return;
+    titleInputRef.current?.focus();
+    titleInputRef.current?.select();
+  }, [isEditingTitle]);
+
+  React.useEffect(() => {
+    setIsEditingTitle(false);
+  }, [selectedAudio?.id]);
+
   return (
     <section className="workspace">
       {selectedAudio ? (
@@ -29,16 +40,31 @@ export function WorkspacePanel({
           <div className="audio-header">
             <div className="title-field">
               <span className="panel-kicker">Current file</span>
-              <input
-                aria-label="Current file title"
-                value={selectedAudio.display_title}
-                onChange={(event) => setSelectedAudio({ ...selectedAudio, display_title: event.target.value })}
-                onBlur={(event) => onUpdateTitle(selectedAudio, event.target.value)}
-              />
+              {isEditingTitle ? (
+                <input
+                  ref={titleInputRef}
+                  aria-label="Current file title"
+                  value={selectedAudio.display_title}
+                  onChange={(event) => setSelectedAudio({ ...selectedAudio, display_title: event.target.value })}
+                  onBlur={(event) => {
+                    setIsEditingTitle(false);
+                    onUpdateTitle(selectedAudio, event.target.value);
+                  }}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="title-display"
+                  aria-label="Current file title"
+                  onClick={() => setIsEditingTitle(true)}
+                >
+                  {selectedAudio.display_title}
+                </button>
+              )}
             </div>
             <div className="toolbar">
               <button type="button" onClick={() => onProcessAudio()}>
-                <Play size={16} /> Process
+                <Play size={16} /> {selectedAudio.latest_job_status === "completed" ? "Reprocess" : "Process"}
               </button>
               <button type="button" onClick={() => onDeleteAudio(selectedAudio)}>
                 <Trash2 size={16} /> Delete
@@ -46,15 +72,13 @@ export function WorkspacePanel({
             </div>
           </div>
 
-          <audio ref={audioRef} controls src={`${API_BASE}/api/audio/${selectedAudio.id}/stream`} />
+          {selectedJob && (
+            <p className="active-model-subtitle">
+              {selectedJob.transcription_model}
+            </p>
+          )}
 
-          <div className="jobs-strip">
-            {jobs.map((job) => (
-              <button type="button" key={job.id} onClick={() => onOpenJob(job)}>
-                {job.status} · {job.transcription_model}
-              </button>
-            ))}
-          </div>
+          <audio ref={audioRef} controls src={`${API_BASE}/api/audio/${selectedAudio.id}/stream`} />
 
           {selectedJob?.status === "failed" && <p className="error">{selectedJob.error_message}</p>}
           {selectedJob?.status === "completed" && (

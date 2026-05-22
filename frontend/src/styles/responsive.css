@@ -10,25 +10,88 @@
 
 @media (max-width: 860px) {
   .topbar {
-    align-items: flex-start;
+    align-items: stretch;
     border-radius: 0 0 24px 24px;
-    flex-direction: column;
+    min-height: 5.9rem;
     position: relative;
+  }
+
+  .brand-lockup {
+    gap: 0.2rem 0.75rem;
+    grid-template-columns: auto minmax(0, 1fr);
+    padding-right: 6rem;
+  }
+
+  .brand-mark {
+    border-radius: 16px;
+    grid-column: 1;
+    grid-row: 1;
+    height: 3rem;
+    width: 3rem;
+  }
+
+  .topbar h1 {
+    align-self: center;
+    font-size: clamp(1.9rem, 9.2vw, 2.75rem);
+    grid-column: 2;
+    grid-row: 1;
+    line-height: 0.95;
   }
 
   .topbar p {
     grid-column: 1 / -1;
+    margin-top: 0.22rem;
   }
 
   .topbar-actions {
-    align-self: stretch;
-    justify-content: space-between;
+    position: absolute;
+    right: 0.85rem;
+    top: 0.75rem;
+  }
+
+  .library-toggle {
+    display: inline-flex;
   }
 
   .layout,
   .layout--active,
   .layout--library {
     grid-template-columns: 1fr;
+  }
+
+  .layout--active .sidebar {
+    bottom: 0;
+    left: 0;
+    max-width: min(86vw, 24rem);
+    position: fixed;
+    top: 0;
+    transform: translateX(-108%);
+    transition: transform 260ms ease;
+    z-index: 30;
+  }
+
+  .app-shell.mobile-library-open .layout--active .sidebar {
+    transform: translateX(0);
+  }
+
+  .mobile-library-backdrop {
+    background: rgba(18, 29, 31, 0.34);
+    border: 0;
+    bottom: 0;
+    display: block;
+    left: 0;
+    margin: 0;
+    min-height: 0;
+    padding: 0;
+    position: fixed;
+    right: 0;
+    top: 0;
+    width: auto;
+    z-index: 20;
+  }
+
+  .app-shell.mobile-library-open .workspace {
+    pointer-events: none;
   }
 
   .workspace {
@@ -51,18 +114,24 @@
   }
 
   .toolbar button,
-  .segmented button,
-  .review-header .export-link {
+  .segmented button {
     flex: 1 1 9rem;
   }
 
-  .sentence-row {
-    grid-template-columns: auto minmax(0, 1fr);
+  .review-header .export-link {
+    font-size: 0.92rem;
+    min-height: 2.05rem;
+    padding: 0.35rem 0.72rem;
+    width: auto;
   }
 
-  .sentence-row strong,
-  .sentence-row textarea {
-    grid-column: 1 / -1;
+  .sentence-row {
+    grid-template-columns: 2rem minmax(0, 1fr);
+  }
+
+  .sentence-meta,
+  .sentence-row .turn-sentence {
+    grid-column: 2;
   }
 
   .turn {
@@ -86,17 +155,13 @@
 }
 
 @media (max-width: 560px) {
-  .brand-lockup {
-    grid-template-columns: 1fr;
-  }
-
   .brand-mark {
-    height: 2.8rem;
-    width: 2.8rem;
+    height: 2.65rem;
+    width: 2.65rem;
   }
 
   .topbar h1 {
-    font-size: clamp(2.2rem, 14vw, 3.4rem);
+    font-size: clamp(1.7rem, 8.4vw, 2.3rem);
   }
 
   .library-row,

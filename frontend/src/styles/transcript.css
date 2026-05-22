@@ -1,9 +1,3 @@
-.jobs-strip {
-  justify-content: flex-start;
-  margin-bottom: 1rem;
-}
-
-.jobs-strip button,
 .segmented button {
   background: rgba(255, 255, 255, 0.64);
   border-color: transparent;
@@ -118,7 +112,7 @@
   border-radius: 14px;
   display: grid;
   gap: 0.6rem;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 2rem minmax(0, 1fr);
   min-height: 5rem;
   padding: 0.72rem;
 }
@@ -126,12 +120,14 @@
 .round-play-button,
 .sentence-row button {
   aspect-ratio: 1;
+  align-self: center;
   background: transparent;
   border-color: transparent;
   border-radius: 999px;
   box-shadow: none;
   color: var(--graphite);
-  padding: 0;
+  min-height: 0;
+  padding: 0 !important;
   width: 2rem;
 }
 
@@ -184,9 +180,10 @@
 }
 
 .sentence-row {
+  align-items: center;
   display: grid;
   gap: 0.65rem;
-  grid-template-columns: auto 6rem minmax(7rem, 10rem) minmax(12rem, 1fr);
+  grid-template-columns: 2rem minmax(7rem, 11rem) minmax(12rem, 1fr);
   padding: 0.85rem 0;
   transition:
     border-color 160ms ease,
@@ -200,8 +197,17 @@
   transform: none;
 }
 
-.sentence-row strong {
+.sentence-meta {
+  display: grid;
+  gap: 0.08rem;
+}
+
+.sentence-meta strong {
   overflow-wrap: anywhere;
+}
+
+.sentence-meta .timestamp {
+  line-height: 1.2;
 }
 
 .turn {
@@ -287,6 +293,24 @@
 }
 
 .speaker-row input,
-.sentence-row textarea {
-  background: rgba(255, 255, 255, 0.42);
+.sentence-row .turn-sentence {
+  border-radius: 10px;
+  display: block;
+  margin-right: 0;
+  min-height: 2.9rem;
+  padding: 0.55rem 0.8rem;
+}
+
+.sentence-row .turn-sentence--editing {
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 0 0 3px rgba(95, 185, 173, 0.24);
+  display: block;
+  font-weight: 500;
+  min-height: 2.9rem;
+  padding: 0.55rem 0.8rem;
+}
+
+.sentence-row .turn-sentence:hover,
+.sentence-row .turn-sentence:focus-visible {
+  background: rgba(95, 185, 173, 0.22);
 }

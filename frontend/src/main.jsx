@@ -40,6 +40,7 @@ export function App() {
   const [isDraggingUpload, setIsDraggingUpload] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isMobileLibraryOpen, setIsMobileLibraryOpen] = useState(false);
   const [viewMode, setViewMode] = useState("sentences");
   const [toasts, setToasts] = useState([]);
   const fileInputRef = useRef(null);
@@ -128,6 +129,7 @@ export function App() {
   }
 
   async function selectAudio(audio) {
+    setIsMobileLibraryOpen(false);
     setSelectedAudio(audio);
     setSelectedJob(null);
     setSpeakers([]);
@@ -312,13 +314,17 @@ export function App() {
 
   return (
     <main
-      className={`app-shell ${isDraggingUpload ? "is-page-dragging" : ""}`}
+      className={`app-shell ${isDraggingUpload ? "is-page-dragging" : ""} ${isMobileLibraryOpen ? "mobile-library-open" : ""}`}
       onDragEnter={handlePageDragEnter}
       onDragOver={handlePageDragOver}
       onDragLeave={handlePageDragLeave}
       onDrop={handleDrop}
     >
-      <AppHeader onOpenSettings={() => setIsSettingsOpen(true)} />
+      <AppHeader
+        isLibraryOpen={isMobileLibraryOpen}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onToggleLibrary={() => setIsMobileLibraryOpen((current) => !current)}
+      />
       <ToastViewport toasts={toasts} />
 
       <section className={layoutMode}>
@@ -326,7 +332,9 @@ export function App() {
           audioItems={audioItems}
           fileInputRef={fileInputRef}
           filteredAudioItems={filteredAudioItems}
+          jobs={jobs}
           onFileInput={handleFileInput}
+          onOpenJob={openJob}
           onProcessAudio={processSelectedAudio}
           onSearch={setSearchQuery}
           onSelectAudio={selectAudio}
@@ -335,9 +343,7 @@ export function App() {
         />
         <WorkspacePanel
           audioRef={audioRef}
-          jobs={jobs}
           onDeleteAudio={deleteAudio}
-          onOpenJob={openJob}
           onPlay={playRange}
           onProcessAudio={processSelectedAudio}
           onRenameSpeaker={renameSpeaker}
@@ -353,6 +359,7 @@ export function App() {
           viewMode={viewMode}
         />
       </section>
+      {isMobileLibraryOpen && <button type="button" className="mobile-library-backdrop" aria-label="Close library panel" onClick={() => setIsMobileLibraryOpen(false)} />}
 
       {isDraggingUpload && (
         <div className="page-drop-overlay" aria-hidden="true">

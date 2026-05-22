@@ -146,6 +146,36 @@
   width: 100%;
 }
 
+.library-job-list {
+  display: grid;
+  gap: 0.3rem;
+  grid-column: 1 / -1;
+  margin-top: 0.08rem;
+}
+
+.library-job-pill {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(76, 103, 100, 0.2);
+  border-radius: 999px;
+  box-shadow: none;
+  color: var(--graphite-soft);
+  font-size: 0.74rem;
+  justify-content: flex-start;
+  min-height: 1.7rem;
+  padding: 0.26rem 0.62rem;
+  text-transform: none;
+  width: 100%;
+}
+
+.library-job-pill:hover,
+.library-job-pill:focus-visible {
+  background: rgba(95, 185, 173, 0.18);
+  box-shadow: none;
+  color: var(--graphite);
+  transform: none;
+}
+
 .library-status-icon {
   align-items: center;
   aspect-ratio: 1;

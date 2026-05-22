@@ -71,6 +71,10 @@
   gap: 0.65rem;
 }
 
+.library-toggle {
+  display: none;
+}
+
 .icon-button {
   aspect-ratio: 1;
   border-radius: 999px;

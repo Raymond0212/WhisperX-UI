@@ -8,3 +8,6 @@
   position: relative;
 }
 
+.mobile-library-backdrop {
+  display: none;
+}

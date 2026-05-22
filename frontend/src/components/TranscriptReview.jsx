@@ -221,25 +221,32 @@ function EditableTurnSentence({ sentence, isEditing, onEdit, onCancel, onUpdateS
 }
 
 function SentenceList({ sentences, onPlay, onUpdateSentence }) {
+  const [editingSentenceId, setEditingSentenceId] = useState(null);
+
   return (
     <div className="sentence-list">
       {sentences.map((sentence) => (
         <article className="sentence-row" key={sentence.id}>
           <button
             type="button"
+            className="round-play-button"
             aria-label={`Play sentence ${sentence.sentence_index ?? sentence.id}`}
             onClick={() => onPlay(sentence.start_time, sentence.end_time)}
           >
             <Play size={15} />
           </button>
-          <span className="timestamp">
-            {formatTime(sentence.start_time)}-{formatTime(sentence.end_time)}
-          </span>
-          <strong>{sentence.speaker_display_name}</strong>
-          <textarea
-            aria-label={`Transcript sentence ${sentence.sentence_index ?? sentence.id}`}
-            defaultValue={sentence.current_text}
-            onBlur={(event) => onUpdateSentence(sentence, event.target.value)}
+          <div className="sentence-meta">
+            <strong>{sentence.speaker_display_name}</strong>
+            <span className="timestamp">
+              {formatTime(sentence.start_time)}-{formatTime(sentence.end_time)}
+            </span>
+          </div>
+          <EditableTurnSentence
+            sentence={sentence}
+            isEditing={editingSentenceId === sentence.id}
+            onEdit={() => setEditingSentenceId(sentence.id)}
+            onCancel={() => setEditingSentenceId(null)}
+            onUpdateSentence={onUpdateSentence}
           />
         </article>
       ))}
