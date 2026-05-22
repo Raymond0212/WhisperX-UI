@@ -78,7 +78,6 @@ Backend behavior also treats silent-audio zero-segment transcription as a valid 
 Offline-friendly local fixtures:
 
 ```bash
-./scripts/download-diarization-benchmark.sh
 ./scripts/run-diarization-benchmark.sh
 ```
 

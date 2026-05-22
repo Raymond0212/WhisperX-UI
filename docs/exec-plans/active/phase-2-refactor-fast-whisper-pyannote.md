@@ -112,7 +112,6 @@ Use repository scripts for repeatable checks:
 - `./scripts/run-backend-tests.sh`
 - `./scripts/smoke-check-local-runtime.sh`
 - `HF_TOKEN=hf_xxx ./scripts/smoke-check-local-runtime.sh` for token-enabled diarization path
-- `./scripts/download-diarization-benchmark.sh`
 - `./scripts/run-diarization-benchmark.sh`
 - `./scripts/download-real-diarization-benchmark.sh` (auto-bootstraps `benchmarks/real-audio/manifest.json` from a small public subset by default)
 - `HF_TOKEN=hf_xxx ./scripts/run-real-diarization-benchmark.sh`

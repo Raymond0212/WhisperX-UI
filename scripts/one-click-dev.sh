@@ -9,17 +9,18 @@ if ! command -v npm >/dev/null 2>&1; then
 fi
 
 cd "$ROOT_DIR"
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "python3 is required."
+if [ -f ".env" ]; then
+  set -a
+  . ".env"
+  set +a
+fi
+
+if ! command -v uv >/dev/null 2>&1; then
+  echo "uv is required."
   exit 1
 fi
-if [ ! -d ".venv" ]; then
-  python3 -m venv .venv
-fi
-. .venv/bin/activate
-python3 -m pip install --upgrade pip
-python3 -m pip install -e .
-BACKEND_RUNNER=(python3 -m uvicorn whisperx_ui_backend.app:app --app-dir backend --reload)
+uv sync
+BACKEND_RUNNER=(uv run uvicorn whisperx_ui_backend.app:app --app-dir backend --reload)
 
 cd "$ROOT_DIR/frontend"
 npm install
@@ -33,7 +34,7 @@ BACKEND_PID=$!
 
 (
   cd "$ROOT_DIR/frontend"
-  npm run dev
+  npm run dev -- --host 0.0.0.0 --port 5173
 ) &
 FRONTEND_PID=$!
 

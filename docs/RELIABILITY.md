@@ -53,7 +53,6 @@ Use these repository scripts for reproducible local validation:
 - Backend tests: `./scripts/run-backend-tests.sh`
 - Runtime smoke validation: `./scripts/smoke-check-local-runtime.sh`
 - Token-enabled diarization smoke validation: `HF_TOKEN=hf_xxx ./scripts/smoke-check-local-runtime.sh`
-- Diarization benchmark fixture availability: `./scripts/download-diarization-benchmark.sh`
 - Deterministic diarization fixture benchmark: `./scripts/run-diarization-benchmark.sh`
 - Real-audio benchmark data fetch/check: `./scripts/download-real-diarization-benchmark.sh` (auto-generates `benchmarks/real-audio/manifest.json` from a small public subset by default)
 - Real-audio benchmark run: `HF_TOKEN=hf_xxx ./scripts/run-real-diarization-benchmark.sh`
@@ -62,7 +61,6 @@ The smoke script reports `[FAIL]` on failed prerequisites, model preparation, jo
 It runs in-process with FastAPI `TestClient`, so it does not depend on binding `127.0.0.1:8000`.
 First run requires internet access for Python dependency installation and model download.
 For silent audio samples, zero transcript sentences are accepted as long as the job completes and transcript endpoint returns a valid list.
-The benchmark download script is currently offline-friendly: it checks for the local `benchmarks/diarization-fixtures/manifest.json` file and exits non-zero if fixtures are missing.
 The benchmark script computes word-level speaker accuracy and speaker-change precision/recall from deterministic local fixtures. It returns non-zero when quality metrics fall below configured thresholds (`MIN_WORD_SPEAKER_ACCURACY`, `MIN_SPEAKER_CHANGE_PRECISION`, `MIN_SPEAKER_CHANGE_RECALL`), whose defaults are `0.80`, `0.70`, and `0.70`.
 For real-audio evaluation, `download-real-diarization-benchmark.sh` now bootstraps a manifest from `diarizers-community/voxconverse` by default (configurable via `BOOTSTRAP_DATASET`, `BOOTSTRAP_SPLIT`, and `BOOTSTRAP_CASES`) and verifies referenced files exist. You can still provide a curated manifest with provenance, local audio/reference paths, and optional download URLs plus checksums. Real benchmark requires `HF_TOKEN` unless explicitly evaluating the no-token fallback path. Speaker-change gating uses a boundary-time collar (`SPEAKER_CHANGE_COLLAR_SECONDS`, default `0.75`) to avoid false failures from near-boundary timestamp jitter.
 
