@@ -18,10 +18,12 @@ def _upload_audio(client: TestClient) -> dict:
     return response.json()
 
 
-def _client(tmp_path, monkeypatch):
-    monkeypatch.setenv("WHISPERX_UI_APP_DATA", str(tmp_path / "app_data"))
+def _client(tmp_path, monkeypatch, app_data_dir=None):
+    app_data = app_data_dir or (tmp_path / "app_data")
+    monkeypatch.setenv("WHISPERX_UI_APP_DATA", str(app_data))
     app_module = importlib.import_module("whisperx_ui_backend.app")
     return TestClient(app_module.app)
+
 
 
 def test_model_options_exposes_phase2_registry_and_defaults(tmp_path, monkeypatch):
@@ -724,3 +726,34 @@ def test_diarize_with_pyannote_falls_back_when_torchaudio_decode_fails(tmp_path,
     assert calls["input"]["sample_rate"] == 16000
     assert tuple(calls["input"]["waveform"].shape) == (1, 4)
     assert calls["input"]["waveform"].dtype == torch.float32
+
+
+def test_runtime_endpoint_exposes_desktop_and_paths(tmp_path, monkeypatch):
+    monkeypatch.setenv("WHISPERX_UI_DESKTOP", "1")
+    app_data = tmp_path / "custom_desktop_data"
+    with _client(tmp_path, monkeypatch, app_data_dir=app_data) as client:
+        response = client.get("/api/runtime")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["version"] == "0.1.0"
+        assert payload["desktop"] is True
+        assert payload["app_data_dir"] == str(app_data.resolve())
+        assert payload["models_dir"] == str((app_data / "models").resolve())
+        assert payload["platform"]
+        assert payload["python"]
+
+
+def test_backend_binding_helper_reads_host_and_port(monkeypatch):
+    config_module = importlib.import_module("whisperx_ui_backend.config")
+    monkeypatch.setenv("WHISPERX_UI_HOST", "127.0.0.1")
+    monkeypatch.setenv("WHISPERX_UI_PORT", "8123")
+    binding = config_module.get_backend_binding()
+    assert binding.host == "127.0.0.1"
+    assert binding.port == 8123
+
+    monkeypatch.setenv("WHISPERX_UI_PORT", "bad-port")
+    try:
+        config_module.get_backend_binding()
+        assert False, "Expected ValueError for invalid port"
+    except ValueError:
+        pass

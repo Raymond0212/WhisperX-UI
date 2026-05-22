@@ -14,6 +14,42 @@ The default one-click path is zero basic configuration: upload audio and click P
 
 This is the canonical zero-basic-config baseline path. It uses `python3 -m venv`, installs backend deps via `pip install -e .`, starts backend on `http://127.0.0.1:8000`, and starts frontend on `http://127.0.0.1:5173`.
 
+
+## Desktop (Electron) Development
+
+Install desktop dependencies:
+
+```bash
+npm run desktop:install
+```
+
+Run desktop mode locally (builds frontend, launches Electron, starts backend on a dynamic localhost port):
+
+```bash
+npm run desktop:dev
+```
+
+Desktop runtime behavior:
+
+- binds backend to `127.0.0.1` on a dynamic port
+- stores runtime data under Electron user data path (`.../WhisperX-UI`)
+- injects API base URL into renderer through preload bridge (`window.whisperxDesktop.apiBaseUrl`)
+
+## Windows Host Compatibility
+
+This repository now includes cross-platform compatibility checks for desktop orchestration (including Windows) in CI via `.github/workflows/desktop-compat.yml`.
+
+Current compatibility scope:
+
+- validates Electron entrypoint syntax on Windows/macOS/Linux (`node --check`)
+- validates backend module import/bytecode compilation (`python -m compileall backend/whisperx_ui_backend`)
+- validates backend binding env parsing (`WHISPERX_UI_HOST` / `WHISPERX_UI_PORT`) with a small Python smoke check
+
+Notes:
+
+- these checks validate launch/config compatibility, not full ML runtime execution
+- full Windows runtime validation (upload → model download → transcription → export) should be run on a native Windows machine as part of release smoke testing
+
 ## Backend
 
 ```bash

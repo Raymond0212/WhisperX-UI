@@ -1,0 +1,48 @@
+name: Desktop compatibility checks
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  desktop-compat:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check Electron entrypoints
+        run: |
+          node --check desktop/electron-main.js
+          node --check desktop/preload.js
+
+      - name: Check backend compilation
+        run: python -m compileall backend/whisperx_ui_backend
+
+      - name: Check backend binding env handling
+        shell: bash
+        run: |
+          export WHISPERX_UI_HOST=127.0.0.1
+          export WHISPERX_UI_PORT=8123
+          PYTHONPATH=backend python - <<'PY'
+          from whisperx_ui_backend.config import get_backend_binding
+          b = get_backend_binding()
+          assert b.host == "127.0.0.1"
+          assert b.port == 8123
+          print("backend binding ok")
+          PY

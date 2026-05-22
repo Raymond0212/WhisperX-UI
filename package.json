@@ -1,0 +1,10 @@
+{
+  "name": "whisperx-ui-desktop-workspace",
+  "private": true,
+  "scripts": {
+    "desktop:install": "npm --prefix frontend install && npm --prefix desktop install",
+    "desktop:dev": "npm --prefix frontend run build && npm --prefix desktop run dev",
+    "desktop:build": "npm --prefix frontend install && npm --prefix frontend run build && npm --prefix desktop install && npm --prefix desktop run build",
+    "desktop:pack": "npm --prefix frontend run build && npm --prefix desktop run pack"
+  }
+}

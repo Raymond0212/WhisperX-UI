@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+from platform import platform
+from sys import executable
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse
 
-from .config import AppConfig, get_config
+from .config import AppConfig, get_config, is_desktop_mode
 from .database import connect, initialize_database
 from .schemas import (
     AudioFileOut,
@@ -49,10 +51,15 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="WhisperX UI", version="0.1.0", lifespan=lifespan)
+
+_allowed_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+if is_desktop_mode():
+    _allowed_origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_credentials=True,
+    allow_origins=_allowed_origins,
+    allow_credentials=not is_desktop_mode(),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -97,6 +104,18 @@ def model_service(config: AppConfig = Depends(get_app_config)) -> ModelService:
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/runtime")
+def runtime(config: AppConfig = Depends(get_app_config)) -> dict[str, str | bool]:
+    return {
+        "version": app.version,
+        "desktop": is_desktop_mode(),
+        "app_data_dir": str(config.app_data_dir),
+        "models_dir": str(config.models_dir),
+        "platform": platform(),
+        "python": executable,
+    }
 
 
 @app.post("/api/audio", response_model=AudioFileOut)
