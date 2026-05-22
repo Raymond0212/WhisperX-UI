@@ -82,6 +82,7 @@ def diarize_with_pyannote(
     audio_path: str,
     model_id: str,
     hf_token: str,
+    device: str = "auto",
     speaker_count: int | None = None,
     min_speakers: int | None = None,
     max_speakers: int | None = None,
@@ -100,6 +101,15 @@ def diarize_with_pyannote(
         pipeline = Pipeline.from_pretrained(model_id, token=hf_token)
     except TypeError:
         pipeline = Pipeline.from_pretrained(model_id, use_auth_token=hf_token)
+
+    try:
+        import torch
+        pipeline.to(torch.device("cuda"))
+    except ImportError as exc:
+        raise RuntimeError(
+            "cuda is not available, default to cpu for pyannote diarization."
+        ) from exc
+    
     kwargs = {
         key: value
         for key, value in {

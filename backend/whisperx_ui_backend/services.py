@@ -903,6 +903,7 @@ class FasterWhisperProcessor:
                 audio_path=audio_path,
                 model_id=diarization_model,
                 hf_token=diarization_token,
+                device=self.request.device,
                 speaker_count=self.request.speaker_count,
                 min_speakers=self.request.min_speakers,
                 max_speakers=self.request.max_speakers,
