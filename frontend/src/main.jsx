@@ -6,7 +6,7 @@ import { SettingsModal } from "./components/SettingsModal.jsx";
 import { ToastViewport } from "./components/ToastViewport.jsx";
 import { UploadModal } from "./components/UploadModal.jsx";
 import { WorkspacePanel } from "./components/WorkspacePanel.jsx";
-import { api } from "./api.js";
+import { API_BASE, api } from "./api.js";
 import {
   DEFAULT_JOB_SETTINGS,
   applySentenceUpdate,
@@ -43,6 +43,7 @@ export function App() {
   const [isMobileLibraryOpen, setIsMobileLibraryOpen] = useState(false);
   const [viewMode, setViewMode] = useState("sentences");
   const [toasts, setToasts] = useState([]);
+  const [isBackendAvailable, setIsBackendAvailable] = useState(true);
   const fileInputRef = useRef(null);
   const dragDepthRef = useRef(0);
   const audioRef = useRef(null);
@@ -52,10 +53,35 @@ export function App() {
 
   useEffect(() => {
     notify("Ready");
-    refreshLibrary();
-    loadSettings();
-    loadModels();
-    loadModelOptions();
+    async function bootstrap() {
+      try {
+        await Promise.all([refreshLibrary(), loadSettings(), loadModels(), loadModelOptions()]);
+        setIsBackendAvailable(true);
+      } catch {
+        setIsBackendAvailable(false);
+      }
+    }
+    void bootstrap();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function checkHealth() {
+      try {
+        const response = await fetch(`${API_BASE}/api/health`);
+        if (!cancelled) setIsBackendAvailable(response.ok);
+      } catch {
+        if (!cancelled) setIsBackendAvailable(false);
+      }
+    }
+    void checkHealth();
+    const timer = window.setInterval(() => {
+      void checkHealth();
+    }, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -364,6 +390,11 @@ export function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         onToggleLibrary={() => setIsMobileLibraryOpen((current) => !current)}
       />
+      {!isBackendAvailable && (
+        <div className="backend-warning" role="alert">
+          Backend service is unavailable. Start backend at <code>http://127.0.0.1:8000</code>.
+        </div>
+      )}
       <ToastViewport toasts={toasts} />
 
       <section className={layoutMode}>

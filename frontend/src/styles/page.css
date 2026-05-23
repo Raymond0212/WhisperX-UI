@@ -11,3 +11,18 @@
 .mobile-library-backdrop {
   display: none;
 }
+
+.backend-warning {
+  background: rgba(169, 75, 69, 0.12);
+  border: 1px solid rgba(169, 75, 69, 0.34);
+  border-radius: 12px;
+  color: var(--danger);
+  font-size: 0.92rem;
+  margin: 0.6rem 1.25rem 0;
+  padding: 0.6rem 0.8rem;
+}
+
+.backend-warning code {
+  color: inherit;
+  font-weight: 700;
+}

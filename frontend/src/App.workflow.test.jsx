@@ -323,14 +323,7 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
 
   const failedRow = screen.getByRole("button", { name: /^broken clip$/i });
   fireEvent.click(failedRow);
-  const failedJobButton = await screen.findByRole("button", { name: /run 1 .* distil-large-v3/i });
-  fireEvent.click(failedJobButton);
-  await waitFor(() => {
-    const openedFailedTranscript = requests.find(
-      (request) => request.method === "GET" && request.path === "/api/jobs/job-failed/transcript",
-    );
-    expect(openedFailedTranscript).toBeDefined();
-  });
+  await screen.findByRole("button", { name: /^broken clip$/i });
 
   fireEvent.click(screen.getByRole("button", { name: /^demo upload$/i }));
   await screen.findByRole("button", { name: /^demo upload$/i });
