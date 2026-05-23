@@ -392,7 +392,7 @@ export function App() {
       />
       {!isBackendAvailable && (
         <div className="backend-warning" role="alert">
-          Backend service is unavailable. Start backend at <code>http://127.0.0.1:8000</code>.
+          Backend service is unavailable. Start backend at <code>{API_BASE}</code>.
         </div>
       )}
       <ToastViewport toasts={toasts} />
