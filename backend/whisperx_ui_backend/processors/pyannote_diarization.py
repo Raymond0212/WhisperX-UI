@@ -91,6 +91,25 @@ def _extract_intervals(diarization: Any) -> list[dict[str, Any]]:
     raise RuntimeError("Unsupported pyannote diarization output format.")
 
 
+def _resolve_pipeline_device(device: str) -> str:
+    try:
+        import torch
+    except ImportError:
+        logger.warning("Torch is unavailable for pyannote; falling back to CPU.")
+        return "cpu"
+
+    if device == "cpu":
+        return "cpu"
+    if device == "cuda":
+        if torch.cuda.is_available():
+            return "cuda"
+        logger.warning("Requested CUDA diarization but CUDA is unavailable; falling back to CPU.")
+        return "cpu"
+    if torch.cuda.is_available():
+        return "cuda"
+    return "cpu"
+
+
 def diarize_with_pyannote(
     *,
     audio_path: str,
@@ -120,14 +139,18 @@ def diarize_with_pyannote(
         except TypeError:
             pipeline = Pipeline.from_pretrained(model_id, use_auth_token=hf_token)
 
-        try:
-            import torch
-            if hasattr(pipeline, "to"):
+        if hasattr(pipeline, "to"):
+            pipeline_device = _resolve_pipeline_device(device)
+            if pipeline_device == "cuda":
+                import torch
                 pipeline.to(torch.device("cuda"))
-        except ImportError as exc:
-            raise RuntimeError(
-                "cuda is not available, default to cpu for pyannote diarization."
-            ) from exc
+            else:
+                try:
+                    import torch
+                    pipeline.to(torch.device("cpu"))
+                except ImportError:
+                    # Pipeline execution can still proceed on CPU-only setups.
+                    pass
 
         kwargs = {
             key: value

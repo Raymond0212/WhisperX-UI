@@ -42,43 +42,36 @@ User opens app
 -> exports VTT or keeps results locally
 ```
 
-Processing only needs a simple state such as:
-
-```text
-Processing audio...
-This may take a while depending on model size and hardware.
-```
-
 ## MVP Functional Requirements
 
 ### Audio Upload
 
-| ID | Requirement |
-| --- | --- |
-| AU-001 | User can upload an audio file from the browser. |
-| AU-002 | Uploaded audio files are retained locally by default. |
-| AU-003 | User can delete uploaded audio files. |
-| AU-004 | User can upload the same source file multiple times. |
-| AU-005 | Duplicate uploaded filenames are automatically renamed. |
+| ID     | Requirement                                                |
+| ------ | ---------------------------------------------------------- |
+| AU-001 | User can upload an audio file from the browser.            |
+| AU-002 | Uploaded audio files are retained locally by default.      |
+| AU-003 | User can delete uploaded audio files.                      |
+| AU-004 | User can upload the same source file multiple times.       |
+| AU-005 | Duplicate uploaded filenames are automatically renamed.    |
 | AU-006 | User can edit the display title of an uploaded audio file. |
-| AU-007 | Each upload is treated as a separate audio item. |
-| AU-008 | Audio files are playable in the browser after upload. |
+| AU-007 | Each upload is treated as a separate audio item.           |
+| AU-008 | Audio files are playable in the browser after upload.      |
 
 Initial supported audio extensions: `.mp3`, `.wav`, `.m4a`, `.flac`, `.ogg`, `.aac`.
 
 ### Transcription
 
-| ID | Requirement |
-| --- | --- |
-| TR-001 | User can run transcription on an uploaded audio file. |
-| TR-002 | Default transcription uses local models. |
-| TR-003 | User can configure the transcription model. |
+| ID     | Requirement                                                                      |
+| ------ | -------------------------------------------------------------------------------- |
+| TR-001 | User can run transcription on an uploaded audio file.                            |
+| TR-002 | Default transcription uses local models.                                         |
+| TR-003 | User can configure the transcription model.                                      |
 | TR-004 | User can upload the same file multiple times for different model configurations. |
-| TR-005 | Transcription output is chunked by sentence. |
-| TR-006 | Transcript is exportable or representable in VTT format. |
-| TR-007 | Transcript sentences have timestamps. |
-| TR-008 | Transcript text is editable by the user. |
-| TR-009 | Original and edited transcript text are both preserved. |
+| TR-005 | Transcription output is chunked by sentence.                                     |
+| TR-006 | Transcript is exportable or representable in VTT format.                         |
+| TR-007 | Transcript sentences have timestamps.                                            |
+| TR-008 | Transcript text is editable by the user.                                         |
+| TR-009 | Original and edited transcript text are both preserved.                          |
 
 Expected local processing pipeline:
 
@@ -92,18 +85,18 @@ faster-whisper transcription
 
 ### Diarization And Speakers
 
-| ID | Requirement |
-| --- | --- |
-| SP-001 | App supports speaker diarization. |
-| SP-002 | Hugging Face pyannote diarization is enabled when the user supplies a transient token. |
-| SP-003 | App assigns speaker labels to transcript sentences. |
-| SP-004 | Initial labels may use names such as `SPEAKER_00`. |
-| SP-005 | User can rename each detected speaker. |
-| SP-006 | Renaming a speaker updates all displayed transcript sentences for that speaker. |
-| SP-007 | Internal speaker IDs remain stable after display names change. |
-| SP-008 | App provides a speaker sample section after diarization. |
-| SP-009 | User can play a sample audio clip for each detected speaker. |
-| SP-010 | Speaker samples help users identify and rename speakers quickly. |
+| ID     | Requirement                                                                                 |
+| ------ | ------------------------------------------------------------------------------------------- |
+| SP-001 | App supports speaker diarization.                                                           |
+| SP-002 | Hugging Face pyannote diarization is enabled when the user supplies a transient token.      |
+| SP-003 | App assigns speaker labels to transcript sentences.                                         |
+| SP-004 | Initial labels may use names such as `SPEAKER_00`.                                          |
+| SP-005 | User can rename each detected speaker.                                                      |
+| SP-006 | Renaming a speaker updates all displayed transcript sentences for that speaker.             |
+| SP-007 | Internal speaker IDs remain stable after display names change.                              |
+| SP-008 | App provides a speaker sample section after diarization.                                    |
+| SP-009 | User can play a sample audio clip for each detected speaker.                                |
+| SP-010 | Speaker samples help users identify and rename speakers quickly.                            |
 | SP-011 | If no Hugging Face token is supplied, processing still completes by assigning `SPEAKER_00`. |
 
 Speaker identity uses stable internal keys and editable display names:
@@ -115,13 +108,13 @@ display_name: Alice
 
 ### Speaker Samples
 
-| ID | Requirement |
-| --- | --- |
+| ID     | Requirement                                                    |
+| ------ | -------------------------------------------------------------- |
 | SS-001 | App generates or selects one sample clip per detected speaker. |
-| SS-002 | User can play each speaker sample. |
-| SS-003 | User can rename speakers from the speaker sample section. |
-| SS-004 | Speaker label edits update the transcript globally. |
-| SS-005 | Samples are short and useful for speaker identification. |
+| SS-002 | User can play each speaker sample.                             |
+| SS-003 | User can rename speakers from the speaker sample section.      |
+| SS-004 | Speaker label edits update the transcript globally.            |
+| SS-005 | Samples are short and useful for speaker identification.       |
 
 Prefer 5 to 15 second samples. Store sample start and end timestamps unless separate clips are needed later.
 
@@ -129,63 +122,63 @@ Prefer 5 to 15 second samples. Store sample start and end timestamps unless sepa
 
 Sentence-level view is canonical.
 
-| ID | Requirement |
-| --- | --- |
-| TV-001 | Transcript is displayed as sentence-level chunks. |
-| TV-002 | Each sentence has start and end timestamps. |
-| TV-003 | Each sentence shows its assigned speaker. |
+| ID     | Requirement                                            |
+| ------ | ------------------------------------------------------ |
+| TV-001 | Transcript is displayed as sentence-level chunks.      |
+| TV-002 | Each sentence has start and end timestamps.            |
+| TV-003 | Each sentence shows its assigned speaker.              |
 | TV-004 | User can click a sentence to play corresponding audio. |
-| TV-005 | User can edit sentence text. |
-| TV-006 | Edited text is persisted. |
-| TV-007 | Sentence-level transcript is VTT-compatible. |
+| TV-005 | User can edit sentence text.                           |
+| TV-006 | Edited text is persisted.                              |
+| TV-007 | Sentence-level transcript is VTT-compatible.           |
 
 Speaker-turn view is derived from adjacent sentences.
 
-| ID | Requirement |
-| --- | --- |
-| BV-001 | App can display transcript grouped by speaker turn. |
+| ID     | Requirement                                                              |
+| ------ | ------------------------------------------------------------------------ |
+| BV-001 | App can display transcript grouped by speaker turn.                      |
 | BV-002 | Adjacent sentences from the same speaker are grouped into larger chunks. |
-| BV-003 | Big chunks are display-only aggregations. |
-| BV-004 | Underlying sentence boundaries remain preserved. |
-| BV-005 | User can click individual sentences inside a big chunk to play audio. |
-| BV-006 | User can still edit transcript text at sentence level. |
+| BV-003 | Big chunks are display-only aggregations.                                |
+| BV-004 | Underlying sentence boundaries remain preserved.                         |
+| BV-005 | User can click individual sentences inside a big chunk to play audio.    |
+| BV-006 | User can still edit transcript text at sentence level.                   |
 
 ### Playback
 
-| ID | Requirement |
-| --- | --- |
-| PB-001 | App includes an audio player. |
-| PB-002 | User can play uploaded audio. |
-| PB-003 | User can click a transcript sentence to play that sentence's audio. |
-| PB-004 | Playback seeks to the sentence start timestamp. |
-| PB-005 | Playback can stop or pause at the sentence end timestamp. |
-| PB-006 | Sentence playback works in sentence and speaker-turn views. |
+| ID     | Requirement                                                                         |
+| ------ | ----------------------------------------------------------------------------------- |
+| PB-001 | App includes an audio player.                                                       |
+| PB-002 | User can play uploaded audio.                                                       |
+| PB-003 | User can click a transcript sentence to play that sentence's audio.                 |
+| PB-004 | Playback seeks to the sentence start timestamp.                                     |
+| PB-005 | Playback can stop or pause at the sentence end timestamp.                           |
+| PB-006 | Sentence playback works in sentence and speaker-turn views.                         |
 | PB-007 | Speaker sample playback uses the same audio source and timestamp-seeking mechanism. |
 
 ### Editing
 
-| ID | Requirement |
-| --- | --- |
-| ED-001 | User can edit transcript sentence text. |
-| ED-002 | Edited transcript text is saved to SQLite. |
-| ED-003 | Original transcript text is preserved. |
-| ED-004 | Edited transcript text is used in display and exports. |
-| ED-005 | Transcript edits do not modify timestamps. |
+| ID     | Requirement                                                                           |
+| ------ | ------------------------------------------------------------------------------------- |
+| ED-001 | User can edit transcript sentence text.                                               |
+| ED-002 | Edited transcript text is saved to SQLite.                                            |
+| ED-003 | Original transcript text is preserved.                                                |
+| ED-004 | Edited transcript text is used in display and exports.                                |
+| ED-005 | Transcript edits do not modify timestamps.                                            |
 | ED-006 | Transcript edits do not modify speaker assignments unless explicitly supported later. |
 
 MVP save behavior should use save-on-blur or short debounce autosave.
 
 ### Model Configuration
 
-| ID | Requirement |
-| --- | --- |
-| MC-001 | User can configure transcription model before processing. |
-| MC-002 | User can configure diarization model before processing. |
-| MC-003 | Default models are local. |
-| MC-004 | Hugging Face pyannote diarization is optional for the zero-basic-config path. |
-| MC-005 | User can provide a transient Hugging Face token for model download or pyannote diarization. |
-| MC-006 | Model settings used for a job are persisted. |
-| MC-007 | Different uploads or jobs may use different model settings. |
+| ID     | Requirement                                                                                        |
+| ------ | -------------------------------------------------------------------------------------------------- |
+| MC-001 | User can configure transcription model before processing.                                          |
+| MC-002 | User can configure diarization model before processing.                                            |
+| MC-003 | Default models are local.                                                                          |
+| MC-004 | Hugging Face pyannote diarization is optional for the zero-basic-config path.                      |
+| MC-005 | User can provide a transient Hugging Face token for model download or pyannote diarization.        |
+| MC-006 | Model settings used for a job are persisted.                                                       |
+| MC-007 | Different uploads or jobs may use different model settings.                                        |
 | MC-008 | The basic local transcription model can be downloaded automatically before first local processing. |
 
 Transcription settings include `transcription_engine`, `transcription_model`, language, device, compute type, and batch size. Diarization settings include `diarization_engine`, `diarization_model`, speaker count, min speakers, max speakers, and a runtime-only token when pyannote diarization is enabled.
@@ -193,15 +186,15 @@ Queue settings include `job_queue_mode` (`sequence` default, `parallel` optional
 
 ### API Keys
 
-| ID | Requirement |
-| --- | --- |
-| AK-001 | User can provide a Hugging Face token for model download or pyannote diarization. |
-| AK-002 | API keys are optional. |
+| ID     | Requirement                                                                                       |
+| ------ | ------------------------------------------------------------------------------------------------- |
+| AK-001 | User can provide a Hugging Face token for model download or pyannote diarization.                 |
+| AK-002 | API keys are optional.                                                                            |
 | AK-003 | App works without tokens by using local faster-whisper transcription and single-speaker fallback. |
-| AK-004 | API keys are masked in the UI. |
-| AK-005 | API keys are not logged. |
-| AK-006 | User can remove saved API keys. |
-| AK-007 | Persisted API keys are stored securely. |
+| AK-004 | API keys are masked in the UI.                                                                    |
+| AK-005 | API keys are not logged.                                                                          |
+| AK-006 | User can remove saved API keys.                                                                   |
+| AK-007 | Persisted API keys are stored securely.                                                           |
 
 MVP default: do not persist API keys unless encrypted storage is deliberately implemented.
 
@@ -232,24 +225,24 @@ failed
 deleted
 ```
 
-| ID | Requirement |
-| --- | --- |
-| JS-001 | A job starts when the user clicks process. |
-| JS-002 | A job stores its current status. |
+| ID     | Requirement                                   |
+| ------ | --------------------------------------------- |
+| JS-001 | A job starts when the user clicks process.    |
+| JS-002 | A job stores its current status.              |
 | JS-003 | Successful jobs save transcript and speakers. |
-| JS-004 | Failed jobs save error details. |
-| JS-005 | User can view failed job status. |
+| JS-004 | Failed jobs save error details.               |
+| JS-005 | User can view failed job status.              |
 
 ### VTT Export
 
-| ID | Requirement |
-| --- | --- |
+| ID      | Requirement                                              |
+| ------- | -------------------------------------------------------- |
 | VTT-001 | Transcript is sentence-chunked in VTT-compatible format. |
-| VTT-002 | Each VTT cue represents one sentence. |
-| VTT-003 | Each cue includes start and end timestamps. |
-| VTT-004 | Each cue uses current edited transcript text. |
-| VTT-005 | Each cue uses current speaker display name. |
-| VTT-006 | User can export transcript as `.vtt`. |
+| VTT-002 | Each VTT cue represents one sentence.                    |
+| VTT-003 | Each cue includes start and end timestamps.              |
+| VTT-004 | Each cue uses current edited transcript text.            |
+| VTT-005 | Each cue uses current speaker display name.              |
+| VTT-006 | User can export transcript as `.vtt`.                    |
 
 Example:
 
@@ -262,23 +255,23 @@ Alice: I think we should review the timeline again.
 
 ### Deletion
 
-| ID | Requirement |
-| --- | --- |
-| DL-001 | User can delete uploaded audio. |
+| ID     | Requirement                                               |
+| ------ | --------------------------------------------------------- |
+| DL-001 | User can delete uploaded audio.                           |
 | DL-002 | Deleted audio does not appear in the normal library view. |
-| DL-003 | Related jobs and transcripts are deleted or hidden. |
-| DL-004 | Deletion avoids accidental data loss where possible. |
+| DL-003 | Related jobs and transcripts are deleted or hidden.       |
+| DL-004 | Deletion avoids accidental data loss where possible.      |
 
 MVP policy: use soft delete by setting `deleted_at`.
 
 ### Duplicate Filenames
 
-| ID | Requirement |
-| --- | --- |
-| DF-001 | User can upload files with the same original filename. |
-| DF-002 | App automatically generates a unique stored filename. |
+| ID     | Requirement                                                    |
+| ------ | -------------------------------------------------------------- |
+| DF-001 | User can upload files with the same original filename.         |
+| DF-002 | App automatically generates a unique stored filename.          |
 | DF-003 | Display title may initially be based on the original filename. |
-| DF-004 | Duplicate uploads do not overwrite previous uploads. |
+| DF-004 | Duplicate uploads do not overwrite previous uploads.           |
 
 Recommended stored filename format:
 
@@ -288,13 +281,13 @@ Recommended stored filename format:
 
 ## Main Screens
 
-| Screen | Requirements |
-| --- | --- |
-| Library | Show uploaded audio files, editable titles, upload date, duration, job status, delete action, and open action. |
-| Upload | Support file select or drag-and-drop, title editing, model configuration, and one-click process. |
-| Processing | Show simple processing state, final result, or failure error. |
+| Screen            | Requirements                                                                                                                        |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Library           | Show uploaded audio files, editable titles, upload date, duration, job status, delete action, and open action.                      |
+| Upload            | Support file select or drag-and-drop, title editing, model configuration, and one-click process.                                    |
+| Processing        | Show simple processing state, final result, or failure error.                                                                       |
 | Transcript Review | Show audio player, speaker labeling, speaker samples, sentence view, speaker-turn view, sentence playback, editing, and VTT export. |
-| Settings | Configure default transcription model, diarization model, runtime defaults, local model paths, and storage location if supported. |
+| Settings          | Configure default transcription model, diarization model, runtime defaults, local model paths, and storage location if supported.   |
 
 ## Product Decisions
 

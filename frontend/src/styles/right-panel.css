@@ -148,8 +148,35 @@
 .active-model-subtitle {
   color: var(--muted);
   font-size: 0.83rem;
-  margin: -0.25rem 0 0.6rem 0.65rem;
+  margin: -0.25rem 0 0.32rem 0.65rem;
   opacity: 0.3;
+}
+
+.job-progress {
+  margin: 0 0 0.72rem 0.65rem;
+}
+
+.job-progress__rail {
+  background: rgba(31, 49, 49, 0.08);
+  border: 1px solid rgba(31, 49, 49, 0.08);
+  border-radius: 999px;
+  height: 0.3rem;
+  overflow: hidden;
+  width: min(26rem, 92%);
+}
+
+.job-progress__fill {
+  background: linear-gradient(90deg, rgba(95, 185, 173, 0.46), rgba(64, 81, 80, 0.38));
+  display: block;
+  height: 100%;
+  transition: width 220ms ease;
+}
+
+.job-progress__label {
+  color: var(--muted);
+  font-size: 0.76rem;
+  margin: 0.2rem 0 0;
+  opacity: 0.48;
 }
 
 .custom-audio-player {

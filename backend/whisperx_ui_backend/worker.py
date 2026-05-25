@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .config import AppConfig
 from .database import connect, transaction
-from .services import run_job_execution, utc_now
+from .services import JobProgressReporter, run_job_execution, utc_now
 
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,7 @@ def _heartbeat_update(stop_event: threading.Event, database_path: Path, job_id: 
                     "UPDATE transcription_jobs SET last_heartbeat_at = ? WHERE id = ?",
                     (utc_now(), job_id),
                 )
+            JobProgressReporter(connection).advance_with_heartbeat(job_id)
         finally:
             connection.close()
 
@@ -56,6 +57,7 @@ def main() -> int:
                 """,
                 (utc_now(), os.getpid(), utc_now(), utc_now(), args.job_id),
             )
+        JobProgressReporter(connection).set_stage(args.job_id, "starting")
     finally:
         connection.close()
 
@@ -84,6 +86,7 @@ def main() -> int:
                     """,
                     (str(exc), utc_now(), args.job_id),
                 )
+            JobProgressReporter(connection).mark_failed(args.job_id, str(exc))
         finally:
             connection.close()
         return 1

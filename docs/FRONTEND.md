@@ -8,7 +8,7 @@ The frontend is a React browser UI designed for local use and future Electron pa
 
 - Library: uploaded audio list, editable title, upload date, duration, job status, delete action, and open action.
 - Upload: file select or drag-and-drop, selected filename, title editing, model configuration, and one-click process.
-- Processing: simple waiting state and final success or failure result.
+- Processing: non-blocking progress state with subtle stage text/progress strip plus final success or failure result.
 - Transcript Review: audio player, speaker samples, speaker renaming, sentence view, speaker-turn view, transcript editing, sentence playback, and VTT export.
 - Settings: default transcription model, diarization model, and runtime defaults for local processing.
 
@@ -31,6 +31,7 @@ Current implementation covers the core upload/library/workspace/settings flow wi
 - Treat Diarization/HF token input as transient per-job data. Send it only in job request `settings`; do not persist it as a saved default.
 - Use save-on-blur or short debounce autosave for transcript sentence edits.
 - Show failed job status and error messages in the UI.
+- While polling `GET /api/jobs/{job_id}`, render progress from `progress_stage`, `progress_percent`, and `progress_message` in a non-blocking way that blends into the workspace (no modal/overlay).
 - Hide soft-deleted audio from the normal library view.
 
 ## Electron Compatibility

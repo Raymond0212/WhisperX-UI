@@ -52,6 +52,11 @@ Represents one processing run for an audio file.
 | `last_heartbeat_at` | Last worker heartbeat timestamp. |
 | `worker_exit_code` | Worker exit code when known. |
 | `worker_signal` | Worker signal when process was terminated by signal. |
+| `progress_stage` | Current processing stage label. |
+| `progress_percent` | Approximate stage-weighted completion percent (`0..100`). |
+| `progress_message` | User-facing stage text for non-blocking UI progress display. |
+| `progress_stage_started_at` | Timestamp when current stage started. |
+| `progress_updated_at` | Timestamp for most recent progress update. |
 
 Suggested statuses:
 
@@ -159,6 +164,8 @@ Current implementation notes:
 
 - Jobs use fixed engines: `transcription_engine: "faster-whisper"` and `diarization_engine: "huggingface-pyannote"`.
 - `POST /api/jobs` returns immediately with a queued/processing job; completion is retrieved via `GET /api/jobs/{job_id}` polling.
+- Job responses include progress metadata (`progress_stage`, `progress_percent`, `progress_message`, `progress_stage_started_at`, `progress_updated_at`) for stage-level UI feedback while polling.
+- Progress percentages are approximate, stage-weighted estimates (not exact model inference completion).
 - Request `settings` may carry transient runtime-only values such as `diarization_token` or `hf_token`; secret-like values are stripped from persisted `settings_json`.
 - Token-enabled pyannote diarization passes a preloaded `{waveform, sample_rate}` input to the pipeline. Audio decoding tries torchaudio's soundfile backend, then torchaudio's default loader, then falls back to `faster_whisper.audio.decode_audio`; multi-channel input is averaged to mono float32.
 - If a diarization token is present, pyannote diarization runs and its output is normalized into timestamped speaker intervals. The parser accepts the pyannote community wrapper's `exclusive_speaker_diarization`, falls back to `speaker_diarization`, then to raw `itertracks` annotations or interval dictionaries.

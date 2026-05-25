@@ -29,12 +29,18 @@ function createApiMock({ settingsOverrides = {} } = {}) {
     id: "job-complete",
     status: "completed",
     transcription_model: "distil-large-v3",
+    progress_stage: "completed",
+    progress_percent: 100,
+    progress_message: "Completed",
     error_message: null,
   };
   const failedJob = {
     id: "job-failed",
     status: "failed",
     transcription_model: "distil-large-v3",
+    progress_stage: "failed",
+    progress_percent: 53,
+    progress_message: "Model crashed",
     error_message: "Model crashed",
   };
   const uploadedJobs = [];
@@ -137,13 +143,25 @@ function createApiMock({ settingsOverrides = {} } = {}) {
       uploadedJobs.unshift(completedJob);
       uploadedAudio.latest_job_status = "completed";
       createdJobPollCount = 0;
-      return jsonResponse({ ...completedJob, status: "queued" });
+      return jsonResponse({
+        ...completedJob,
+        status: "queued",
+        progress_stage: "queued",
+        progress_percent: 1,
+        progress_message: "Queued",
+      });
     }
 
     if (method === "GET" && path === "/api/jobs/job-complete") {
       createdJobPollCount += 1;
       if (createdJobPollCount < 2) {
-        return jsonResponse({ ...completedJob, status: "processing" });
+        return jsonResponse({
+          ...completedJob,
+          status: "processing",
+          progress_stage: "transcribing",
+          progress_percent: 28,
+          progress_message: "Transcribing audio",
+        });
       }
       return jsonResponse(completedJob);
     }
@@ -153,7 +171,13 @@ function createApiMock({ settingsOverrides = {} } = {}) {
       if (jobId === "job-complete") {
         createdJobPollCount += 1;
         if (createdJobPollCount < 2) {
-          return jsonResponse({ ...completedJob, status: "processing" });
+          return jsonResponse({
+            ...completedJob,
+            status: "processing",
+            progress_stage: "transcribing",
+            progress_percent: 28,
+            progress_message: "Transcribing audio",
+          });
         }
         return jsonResponse(completedJob);
       }
@@ -278,6 +302,7 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   fireEvent.click(screen.getByRole("button", { name: /close settings/i }));
   fireEvent.click(screen.getByRole("button", { name: /^process$/i }));
 
+  expect(await screen.findByRole("progressbar")).not.toBeNull();
   await screen.findByText("Processing complete.");
   const modelRequest = requests.find(
     (request) => request.method === "POST" && request.path === "/api/models/prepare-basic",

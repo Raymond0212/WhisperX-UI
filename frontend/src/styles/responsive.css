@@ -244,6 +244,33 @@
   }
 }
 
+@media (max-height: 520px) and (max-width: 950px) {
+  .topbar {
+    border-radius: 0 0 14px 14px;
+    min-height: 3.4rem;
+    padding: 0.45rem 0.75rem;
+  }
+
+  .brand-lockup {
+    gap: 0 0.55rem;
+  }
+
+  .brand-mark {
+    border-radius: 12px;
+    height: 2.05rem;
+    width: 2.05rem;
+  }
+
+  .topbar h1 {
+    font-size: clamp(1.35rem, 4vw, 1.95rem);
+    line-height: 0.95;
+  }
+
+  .topbar p {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

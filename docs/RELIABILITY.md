@@ -19,7 +19,9 @@ The backend enqueues jobs first, then a local scheduler starts supervised model 
 
 ## Processing Expectations
 
-Real-time progress is not required for MVP. The UI may show `queued` and `processing` while the scheduler and worker run.
+The API now reports approximate stage-weighted progress while a job is `queued` or `processing`.
+Progress data is persisted on each job row as `progress_stage`, `progress_percent`, `progress_message`, `progress_stage_started_at`, and `progress_updated_at`.
+Percentages are intentionally approximate and bounded by stage ranges; they are not exact inference completion metrics.
 
 Processing should avoid partial success states that look completed. If transcript or speaker persistence fails, the job should be treated as failed unless the implementation has an explicit recovery path.
 

@@ -5,6 +5,8 @@ import sqlite3
 import sys
 import time
 import types
+import uuid
+from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 
@@ -35,6 +37,10 @@ def _wait_for_terminal_job(client: TestClient, job_id: str, timeout_seconds: flo
         if time.time() >= deadline:
             raise AssertionError(f"Timed out waiting for terminal job status: {job}")
         time.sleep(0.05)
+
+
+def _utc_now() -> str:
+    return datetime.now(UTC).isoformat()
 
 
 def test_model_options_exposes_phase2_registry_and_defaults(tmp_path, monkeypatch):
@@ -192,11 +198,81 @@ def test_job_create_uses_phase2_engine_fields(tmp_path, monkeypatch):
         assert response.status_code == 200, response.text
         job = response.json()
         assert job["status"] in {"queued", "processing"}
+        assert job["progress_stage"] in {"queued", "starting", "preparing_transcription", "transcribing"}
+        assert isinstance(job["progress_percent"], (float, int))
+        assert job["progress_message"]
         job = _wait_for_terminal_job(client, job["id"])
         assert job["status"] == "failed"
+        assert job["progress_stage"] == "failed"
+        assert job["progress_message"]
         assert job["transcription_engine"] == "faster-whisper"
         assert job["diarization_engine"] == "huggingface-pyannote"
         assert job["settings"]["transcription_model"] == "distil-large-v3"
+
+
+def test_list_audio_jobs_excludes_deleted_rows(tmp_path, monkeypatch):
+    with _client(tmp_path, monkeypatch) as client:
+        audio = _upload_audio(client)
+        active_job_id = str(uuid.uuid4())
+        deleted_job_id = str(uuid.uuid4())
+        now = _utc_now()
+        connection = client.app.state.connection
+        connection.execute(
+            """
+            INSERT INTO transcription_jobs (
+                id, audio_file_id, status, transcription_engine, transcription_model,
+                diarization_engine, diarization_model, language, device, compute_type,
+                batch_size, speaker_count, min_speakers, max_speakers, settings_json,
+                error_message, created_at
+            )
+            VALUES (?, ?, 'completed', ?, ?, ?, ?, NULL, ?, ?, ?, NULL, NULL, NULL, ?, NULL, ?)
+            """,
+            (
+                active_job_id,
+                audio["id"],
+                "faster-whisper",
+                "distil-large-v3",
+                "huggingface-pyannote",
+                "pyannote/speaker-diarization-community-1",
+                "cpu",
+                "int8",
+                8,
+                "{}",
+                now,
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO transcription_jobs (
+                id, audio_file_id, status, transcription_engine, transcription_model,
+                diarization_engine, diarization_model, language, device, compute_type,
+                batch_size, speaker_count, min_speakers, max_speakers, settings_json,
+                error_message, created_at
+            )
+            VALUES (?, ?, 'deleted', ?, ?, ?, ?, NULL, ?, ?, ?, NULL, NULL, NULL, ?, NULL, ?)
+            """,
+            (
+                deleted_job_id,
+                audio["id"],
+                "faster-whisper",
+                "distil-large-v3",
+                "huggingface-pyannote",
+                "pyannote/speaker-diarization-community-1",
+                "cpu",
+                "int8",
+                8,
+                "{}",
+                now,
+            ),
+        )
+        connection.commit()
+
+        response = client.get(f"/api/audio/{audio['id']}/jobs")
+        assert response.status_code == 200, response.text
+        jobs = response.json()
+        job_ids = {job["id"] for job in jobs}
+        assert active_job_id in job_ids
+        assert deleted_job_id not in job_ids
 
 
 def test_settings_default_to_phase2_contract(tmp_path, monkeypatch):
@@ -271,8 +347,11 @@ def test_job_uses_stored_hf_token_when_request_omits_token(tmp_path, monkeypatch
         assert response.status_code == 200, response.text
         job = response.json()
         assert job["status"] in {"queued", "processing"}
+        assert job["progress_stage"] in {"queued", "starting", "preparing_transcription", "transcribing"}
         job = _wait_for_terminal_job(client, job["id"])
         assert job["status"] == "completed"
+        assert job["progress_stage"] == "completed"
+        assert float(job["progress_percent"]) == 100.0
 
     assert diarize_calls["hf_token"] == "hf-saved-token"
 
@@ -654,6 +733,26 @@ def test_settings_sanitize_legacy_or_invalid_models_to_phase2_defaults(tmp_path,
         assert settings["diarization_model"] == "pyannote/speaker-diarization-community-1"
 
 
+def test_database_initialization_adds_progress_columns(tmp_path, monkeypatch):
+    with _client(tmp_path, monkeypatch):
+        db_path = tmp_path / "app_data" / "database.sqlite"
+        connection = sqlite3.connect(db_path)
+        try:
+            columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(transcription_jobs)").fetchall()
+            }
+        finally:
+            connection.close()
+    for column in (
+        "progress_stage",
+        "progress_percent",
+        "progress_message",
+        "progress_stage_started_at",
+        "progress_updated_at",
+    ):
+        assert column in columns
+
+
 def test_legacy_provider_columns_still_accept_new_job_payload(tmp_path, monkeypatch):
     data_dir = tmp_path / "legacy_app_data"
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -876,3 +975,83 @@ def test_diarize_with_pyannote_falls_back_when_torchaudio_decode_fails(tmp_path,
     assert calls["input"]["sample_rate"] == 16000
     assert tuple(calls["input"]["waveform"].shape) == (1, 4)
     assert calls["input"]["waveform"].dtype == torch.float32
+
+
+def test_faster_whisper_resolves_cuda_to_cpu_when_cuda_unavailable(monkeypatch):
+    import torch
+
+    processor_module = importlib.import_module("whisperx_ui_backend.processors.faster_whisper_processor")
+
+    class FakeModel:
+        init_kwargs = None
+
+        def __init__(self, *_args, **kwargs):
+            FakeModel.init_kwargs = kwargs
+
+        def transcribe(self, *_args, **_kwargs):
+            class Info:
+                language = "en"
+
+            return iter([]), Info()
+
+    monkeypatch.setitem(sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=FakeModel))
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+    payload = processor_module.transcribe_with_faster_whisper(
+        audio_path="/tmp/audio.wav",
+        model_id="distil-large-v3",
+        device="cuda",
+        compute_type="int8",
+        download_root="/tmp/models",
+    )
+
+    assert payload["segments"] == []
+    assert FakeModel.init_kwargs["device"] == "cpu"
+
+
+def test_pyannote_resolves_cuda_to_cpu_when_cuda_unavailable(tmp_path, monkeypatch):
+    import torch
+
+    diarization_module = importlib.import_module("whisperx_ui_backend.processors.pyannote_diarization")
+    calls: dict = {}
+
+    class FakeTurn:
+        def __init__(self, start: float, end: float):
+            self.start = start
+            self.end = end
+
+    class FakeAnnotation:
+        def itertracks(self, yield_label=True):
+            yield (FakeTurn(0.0, 0.5), None, "SPEAKER_00")
+
+    class FakePipelineInstance:
+        def to(self, device_obj):
+            calls["to"] = str(device_obj)
+            return self
+
+        def __call__(self, diarization_input, **kwargs):
+            calls["input"] = diarization_input
+            return FakeAnnotation()
+
+    class FakePipeline:
+        @staticmethod
+        def from_pretrained(model_id, token=None, use_auth_token=None):
+            return FakePipelineInstance()
+
+    fake_pyannote_audio = types.SimpleNamespace(Pipeline=FakePipeline)
+    fake_pyannote_pkg = types.ModuleType("pyannote")
+    fake_pyannote_pkg.audio = fake_pyannote_audio
+    monkeypatch.setitem(sys.modules, "pyannote", fake_pyannote_pkg)
+    monkeypatch.setitem(sys.modules, "pyannote.audio", fake_pyannote_audio)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr("torchaudio.load", lambda *_args, **_kwargs: (torch.tensor([[0.1, -0.1]]), 16000))
+
+    intervals = diarization_module.diarize_with_pyannote(
+        audio_path=str(tmp_path / "audio.wav"),
+        model_id="pyannote/speaker-diarization-community-1",
+        hf_token="hf-test-token",
+        device="cuda",
+    )
+
+    assert intervals == [{"start": 0.0, "end": 0.5, "speaker": "SPEAKER_00"}]
+    assert calls["to"] == "cpu"

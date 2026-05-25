@@ -39,6 +39,8 @@ export function App() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [isDraggingUpload, setIsDraggingUpload] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false);
+  const [uploadProgressPercent, setUploadProgressPercent] = useState(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isMobileLibraryOpen, setIsMobileLibraryOpen] = useState(false);
   const [viewMode, setViewMode] = useState("sentences");
@@ -216,9 +218,37 @@ export function App() {
   }
 
   function closeUploadModal() {
+    if (isUploadingAudio) return;
     setIsUploadModalOpen(false);
     setSelectedFile(null);
+    setUploadProgressPercent(0);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function uploadAudioWithProgress(body) {
+    if (import.meta.env.MODE === "test" || typeof window.XMLHttpRequest === "undefined") {
+      return api("/api/audio", { method: "POST", body });
+    }
+    return new Promise((resolve, reject) => {
+      const xhr = new window.XMLHttpRequest();
+      xhr.open("POST", `${API_BASE}/api/audio`);
+      xhr.responseType = "json";
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        const percent = Math.max(0, Math.min(100, (event.loaded / event.total) * 100));
+        setUploadProgressPercent(percent);
+      };
+      xhr.onload = () => {
+        if (xhr.status < 200 || xhr.status >= 300) {
+          const detail = xhr.response?.detail || xhr.statusText || "Upload failed";
+          reject(new Error(detail));
+          return;
+        }
+        resolve(xhr.response);
+      };
+      xhr.onerror = () => reject(new Error("Upload failed"));
+      xhr.send(body);
+    });
   }
 
   async function uploadAudio(event) {
@@ -226,17 +256,24 @@ export function App() {
     const form = event.currentTarget;
     const file = selectedFile;
     if (!file) return;
+    setIsUploadingAudio(true);
+    setUploadProgressPercent(0);
     const body = new FormData();
     body.append("file", file);
     body.append("display_title", form.elements.display_title.value || file.name.replace(/\.[^.]+$/, ""));
-    const audio = await api("/api/audio", { method: "POST", body });
-    form.reset();
-    setSelectedFile(null);
-    setIsUploadModalOpen(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    notify("Upload saved locally.");
-    await refreshLibrary();
-    await selectAudio(audio);
+    try {
+      const audio = await uploadAudioWithProgress(body);
+      form.reset();
+      setSelectedFile(null);
+      setIsUploadModalOpen(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      notify("Upload saved locally.");
+      await refreshLibrary();
+      await selectAudio(audio);
+    } finally {
+      setIsUploadingAudio(false);
+      setUploadProgressPercent(0);
+    }
   }
 
   async function updateTitle(audio, displayTitle) {
@@ -319,6 +356,7 @@ export function App() {
         }),
       ),
     });
+    setSelectedJob(job);
     let resolvedJob = job;
     const startedAt = Date.now();
     while (resolvedJob.status === "queued" || resolvedJob.status === "processing") {
@@ -327,7 +365,12 @@ export function App() {
       }
       await new Promise((resolve) => window.setTimeout(resolve, 250));
       resolvedJob = await api(`/api/jobs/${resolvedJob.id}`);
-      updateToast(processToastId, resolvedJob.status === "queued" ? "Queued..." : "Processing audio...", { duration: null });
+      setSelectedJob(resolvedJob);
+      updateToast(
+        processToastId,
+        resolvedJob.progress_message || (resolvedJob.status === "queued" ? "Queued..." : "Processing audio..."),
+        { duration: null },
+      );
     }
     setJobs(await api(`/api/audio/${audioOverride.id}/jobs`));
     if (resolvedJob.status === "completed") {
@@ -471,7 +514,15 @@ export function App() {
         </div>
       )}
 
-      {isUploadModalOpen && <UploadModal onClose={closeUploadModal} onUpload={uploadAudio} selectedFile={selectedFile} />}
+      {isUploadModalOpen && (
+        <UploadModal
+          isUploading={isUploadingAudio}
+          onClose={closeUploadModal}
+          onUpload={uploadAudio}
+          progressPercent={uploadProgressPercent}
+          selectedFile={selectedFile}
+        />
+      )}
       {isSettingsOpen && (
         <SettingsModal
           jobSettings={jobSettings}

@@ -65,6 +65,45 @@
   padding-bottom: 0.3rem;
 }
 
+.transcription-progress {
+  background: rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(76, 103, 100, 0.16);
+  border-radius: 12px;
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.1rem;
+  padding: 0.75rem;
+}
+
+.transcription-progress-meta {
+  align-items: center;
+  color: var(--graphite);
+  display: flex;
+  font-size: 0.9rem;
+  justify-content: space-between;
+}
+
+.transcription-progress-meta strong {
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.transcription-progress-track {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(76, 103, 100, 0.2);
+  border-radius: 999px;
+  height: 0.56rem;
+  overflow: hidden;
+  width: 100%;
+}
+
+.transcription-progress-fill {
+  background: linear-gradient(90deg, rgba(95, 185, 173, 0.82), rgba(31, 119, 113, 0.92));
+  border-radius: inherit;
+  height: 100%;
+  transition: width 220ms ease;
+}
+
 .speaker-list,
 .sentence-list,
 .turn-list {
@@ -75,6 +114,8 @@
 .speaker-list {
   gap: 0.65rem;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  max-height: min(42vh, 18rem);
+  overflow-y: auto;
   padding: 0.35rem 0 0.9rem;
 }
 

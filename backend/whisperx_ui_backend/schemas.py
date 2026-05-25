@@ -73,6 +73,11 @@ class JobOut(BaseModel):
     last_heartbeat_at: str | None = None
     worker_exit_code: int | None = None
     worker_signal: int | None = None
+    progress_stage: str | None = None
+    progress_percent: float | None = None
+    progress_message: str | None = None
+    progress_stage_started_at: str | None = None
+    progress_updated_at: str | None = None
 
 
 class SpeakerOut(BaseModel):

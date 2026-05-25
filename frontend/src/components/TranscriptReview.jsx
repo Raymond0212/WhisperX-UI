@@ -18,6 +18,12 @@ export function TranscriptReview({
 }) {
   const [isSpeakerPanelOpen, setIsSpeakerPanelOpen] = useState(false);
   const isMobile = useIsMobile();
+  const isProcessing = job.status === "queued" || job.status === "processing";
+  const isCompleted = job.status === "completed";
+  const progressPercent = Number.isFinite(Number(job.progress_percent))
+    ? Math.max(0, Math.min(100, Number(job.progress_percent)))
+    : null;
+  const progressLabel = job.progress_message || (job.status === "queued" ? "Queued" : "Processing audio");
   return (
     <div className="review">
       <section className={`speaker-panel ${isSpeakerPanelOpen ? "open" : ""}`}>
@@ -61,8 +67,10 @@ export function TranscriptReview({
           type="button"
           className="export-link"
           aria-label="Export VTT"
+          disabled={!isCompleted}
           data-export-url={`${API_BASE}/api/jobs/${job.id}/export.vtt`}
           onClick={() => {
+            if (!isCompleted) return;
             window.location.assign(`${API_BASE}/api/jobs/${job.id}/export.vtt`);
           }}
         >
@@ -72,7 +80,22 @@ export function TranscriptReview({
       </div>
 
       <div className="review-body">
-        {viewMode === "sentences" ? (
+        {isProcessing && (
+          <section className="transcription-progress" aria-label="Transcription progress">
+            <div className="transcription-progress-meta">
+              <strong>{progressLabel}</strong>
+              <span>{progressPercent === null ? "" : `${Math.round(progressPercent)}%`}</span>
+            </div>
+            <div className="transcription-progress-track" aria-hidden="true">
+              <div
+                className="transcription-progress-fill"
+                style={{ width: `${progressPercent === null ? 0 : progressPercent}%` }}
+              />
+            </div>
+          </section>
+        )}
+
+        {isCompleted && viewMode === "sentences" ? (
           <SentenceList
             sentences={sentences}
             speakers={speakers}
@@ -80,7 +103,9 @@ export function TranscriptReview({
             onRenameSpeaker={onRenameSpeaker}
             onUpdateSentence={onUpdateSentence}
           />
-        ) : (
+        ) : null}
+
+        {isCompleted && viewMode !== "sentences" ? (
           <SpeakerTurnList
             speakerTurns={speakerTurns}
             speakers={speakers}
@@ -88,7 +113,7 @@ export function TranscriptReview({
             onRenameSpeaker={onRenameSpeaker}
             onUpdateSentence={onUpdateSentence}
           />
-        )}
+        ) : null}
       </div>
     </div>
   );

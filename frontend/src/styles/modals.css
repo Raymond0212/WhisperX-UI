@@ -4,7 +4,7 @@
   inset: 0;
   padding: clamp(0.9rem, 3vw, 2rem);
   position: fixed;
-  z-index: 20;
+  z-index: 60;
 }
 
 .modal-backdrop--settings {
@@ -137,6 +137,34 @@
 
 .upload-modal form button[type="submit"] {
   justify-self: end;
+}
+
+.upload-progress {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.upload-progress__rail {
+  background: rgba(31, 49, 49, 0.08);
+  border: 1px solid rgba(31, 49, 49, 0.08);
+  border-radius: 999px;
+  height: 0.34rem;
+  overflow: hidden;
+  width: 100%;
+}
+
+.upload-progress__fill {
+  background: linear-gradient(90deg, rgba(95, 185, 173, 0.5), rgba(64, 81, 80, 0.38));
+  display: block;
+  height: 100%;
+  transition: width 160ms linear;
+}
+
+.upload-progress__label {
+  color: var(--muted);
+  font-size: 0.76rem;
+  margin: 0;
+  opacity: 0.55;
 }
 
 .selected-file-name {

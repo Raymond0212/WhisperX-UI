@@ -140,6 +140,11 @@ def initialize_database(connection: sqlite3.Connection) -> None:
         ("last_heartbeat_at", "TEXT"),
         ("worker_exit_code", "INTEGER"),
         ("worker_signal", "INTEGER"),
+        ("progress_stage", "TEXT"),
+        ("progress_percent", "REAL"),
+        ("progress_message", "TEXT"),
+        ("progress_stage_started_at", "TEXT"),
+        ("progress_updated_at", "TEXT"),
     ):
         if column_name not in job_columns:
             connection.execute(f"ALTER TABLE transcription_jobs ADD COLUMN {column_name} {column_type}")

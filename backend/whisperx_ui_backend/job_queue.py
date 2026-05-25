@@ -14,7 +14,7 @@ from pathlib import Path
 
 from .config import AppConfig
 from .database import connect, transaction
-from .services import run_job_execution
+from .services import JobProgressReporter, run_job_execution
 
 logger = logging.getLogger(__name__)
 
@@ -227,6 +227,7 @@ class JobQueueService:
                     """,
                     (error, utc_now(), job_id),
                 )
+            JobProgressReporter(connection).mark_failed(job_id, error)
         finally:
             connection.close()
 
@@ -269,6 +270,7 @@ class JobQueueService:
                         """,
                         ("Worker heartbeat lost before completion.", utc_now(), str(row["id"])),
                     )
+                JobProgressReporter(connection).mark_failed(str(row["id"]), "Worker heartbeat lost before completion.")
         finally:
             connection.close()
 
@@ -308,6 +310,7 @@ class _InlineWorkerProcess:
                     """,
                     (utc_now(), self.pid, utc_now(), utc_now(), self.job_id),
                 )
+            JobProgressReporter(connection).set_stage(self.job_id, "starting")
             run_job_execution(connection, self.config, self.job_id)
             self._return_code = 0
         except Exception as exc:
@@ -320,6 +323,7 @@ class _InlineWorkerProcess:
                     """,
                     (str(exc), utc_now(), self.job_id),
                 )
+            JobProgressReporter(connection).mark_failed(self.job_id, str(exc))
             self._return_code = 1
         finally:
             connection.close()

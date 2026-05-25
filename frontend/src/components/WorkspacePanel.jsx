@@ -1,5 +1,5 @@
 import React from "react";
-import { Pause, Play, RotateCcw, Volume2, Trash2 } from "lucide-react";
+import { ChevronDown, Pause, Play, RotateCcw, Volume2, Trash2 } from "lucide-react";
 import { API_BASE } from "../api.js";
 import { TranscriptReview } from "./TranscriptReview.jsx";
 
@@ -23,6 +23,7 @@ export function WorkspacePanel({
   viewMode,
 }) {
   const [isEditingTitle, setIsEditingTitle] = React.useState(false);
+  const [isSpeakerSettingsOpen, setIsSpeakerSettingsOpen] = React.useState(true);
   const titleInputRef = React.useRef(null);
 
   React.useEffect(() => {
@@ -107,15 +108,23 @@ export function WorkspacePanel({
           </div>
 
           {selectedJob && (
-            <p className="active-model-subtitle">
-              {selectedJob.transcription_model}
-            </p>
+            <>
+              <p className="active-model-subtitle">{selectedJob.transcription_model}</p>
+              <JobProgress job={selectedJob} />
+            </>
           )}
 
           <CustomAudioPlayer audioRef={audioRef} src={`${API_BASE}/api/audio/${selectedAudio.id}/stream`} />
-
+          {!selectedJob && (
+            <StandaloneSpeakerSettings
+              selectedAudio={selectedAudio}
+              onUpdateRecordingSettings={onUpdateRecordingSettings}
+              isOpen={isSpeakerSettingsOpen}
+              onToggle={() => setIsSpeakerSettingsOpen((current) => !current)}
+            />
+          )}
           {selectedJob?.status === "failed" && <p className="error">{selectedJob.error_message}</p>}
-          {selectedJob?.status === "completed" && (
+          {selectedJob && (
             <TranscriptReview
               job={selectedJob}
               selectedAudio={selectedAudio}
@@ -138,6 +147,29 @@ export function WorkspacePanel({
         </div>
       )}
     </section>
+  );
+}
+
+function JobProgress({ job }) {
+  const isActive = job?.status === "queued" || job?.status === "processing";
+  if (!isActive) return null;
+  const rawValue = Number(job.progress_percent);
+  const value = Number.isFinite(rawValue) ? Math.max(0, Math.min(100, rawValue)) : 0;
+  const label = job.progress_message || (job.status === "queued" ? "Queued" : "Processing");
+  return (
+    <div className="job-progress" aria-live="polite">
+      <div
+        className="job-progress__rail"
+        role="progressbar"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(value)}
+      >
+        <span className="job-progress__fill" style={{ width: `${value}%` }} />
+      </div>
+      <p className="job-progress__label">{label}</p>
+    </div>
   );
 }
 
@@ -222,4 +254,72 @@ function formatPlayerTime(seconds) {
   const mins = Math.floor(whole / 60);
   const secs = whole % 60;
   return `${mins}:${String(secs).padStart(2, "0")}`;
+}
+
+function StandaloneSpeakerSettings({ selectedAudio, onUpdateRecordingSettings, isOpen, onToggle }) {
+  const [values, setValues] = React.useState({
+    speaker_count: selectedAudio.speaker_count ?? "",
+    min_speakers: selectedAudio.min_speakers ?? "",
+    max_speakers: selectedAudio.max_speakers ?? "",
+  });
+
+  React.useEffect(() => {
+    setValues({
+      speaker_count: selectedAudio.speaker_count ?? "",
+      min_speakers: selectedAudio.min_speakers ?? "",
+      max_speakers: selectedAudio.max_speakers ?? "",
+    });
+  }, [selectedAudio.id, selectedAudio.speaker_count, selectedAudio.min_speakers, selectedAudio.max_speakers]);
+
+  function handleBlur() {
+    onUpdateRecordingSettings(selectedAudio, values);
+  }
+
+  return (
+    <section className={`speaker-panel ${isOpen ? "open" : ""}`}>
+      <button type="button" className="speaker-panel-toggle" aria-expanded={isOpen} onClick={onToggle}>
+        <span>Speaker Settings</span>
+        <ChevronDown size={17} aria-hidden="true" />
+      </button>
+      {isOpen && (
+        <div className="speaker-list">
+          <div className="recording-settings" aria-label="Recording diarization settings">
+            <label>
+              <span>Speaker count</span>
+              <input
+                type="number"
+                min="1"
+                max="20"
+                value={values.speaker_count}
+                onChange={(event) => setValues((current) => ({ ...current, speaker_count: event.target.value }))}
+                onBlur={handleBlur}
+              />
+            </label>
+            <label>
+              <span>Min speakers</span>
+              <input
+                type="number"
+                min="1"
+                max="20"
+                value={values.min_speakers}
+                onChange={(event) => setValues((current) => ({ ...current, min_speakers: event.target.value }))}
+                onBlur={handleBlur}
+              />
+            </label>
+            <label>
+              <span>Max speakers</span>
+              <input
+                type="number"
+                min="1"
+                max="20"
+                value={values.max_speakers}
+                onChange={(event) => setValues((current) => ({ ...current, max_speakers: event.target.value }))}
+                onBlur={handleBlur}
+              />
+            </label>
+          </div>
+        </div>
+      )}
+    </section>
+  );
 }

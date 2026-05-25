@@ -37,6 +37,22 @@ class TranscriptWord:
     speaker: str | None = None
 
 
+def _resolve_device(device: str) -> str:
+    if device == "auto":
+        return "cpu"
+    if device != "cuda":
+        return device
+    try:
+        import torch
+    except ImportError:
+        logger.warning("Requested CUDA transcription but torch is unavailable; falling back to CPU.")
+        return "cpu"
+    if not torch.cuda.is_available():
+        logger.warning("Requested CUDA transcription but CUDA is unavailable; falling back to CPU.")
+        return "cpu"
+    return "cuda"
+
+
 def transcribe_with_faster_whisper(
     *,
     audio_path: str,
@@ -53,7 +69,7 @@ def transcribe_with_faster_whisper(
             "faster-whisper is not installed. Install dependencies before transcription."
         ) from exc
 
-    resolved_device = "cpu" if device == "auto" else device
+    resolved_device = _resolve_device(device)
     logger.debug(
         "faster-whisper transcribe start audio_path=%s model_id=%s device=%s compute_type=%s download_root=%s language=%s",
         audio_path,

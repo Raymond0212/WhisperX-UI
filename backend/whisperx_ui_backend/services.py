@@ -39,6 +39,46 @@ from .schemas import JobCreate, ModelPrepareRequest
 
 logger = logging.getLogger(__name__)
 
+PROGRESS_STAGE_RANGES: dict[str, tuple[float, float]] = {
+    "queued": (0.0, 2.0),
+    "starting": (2.0, 5.0),
+    "preparing_transcription": (5.0, 10.0),
+    "transcribing": (10.0, 55.0),
+    "preparing_diarization": (55.0, 62.0),
+    "diarizing": (62.0, 82.0),
+    "assigning_speakers": (82.0, 90.0),
+    "building_sentences": (90.0, 96.0),
+    "persisting_results": (96.0, 99.0),
+    "completed": (100.0, 100.0),
+    "failed": (0.0, 100.0),
+}
+
+PROGRESS_STAGE_MESSAGES: dict[str, str] = {
+    "queued": "Queued",
+    "starting": "Starting worker",
+    "preparing_transcription": "Preparing transcription",
+    "transcribing": "Transcribing audio",
+    "preparing_diarization": "Preparing diarization",
+    "diarizing": "Running diarization",
+    "assigning_speakers": "Assigning speakers",
+    "building_sentences": "Building sentences",
+    "persisting_results": "Persisting results",
+    "completed": "Completed",
+    "failed": "Failed",
+}
+
+PROGRESS_STAGE_DURATIONS_SECONDS: dict[str, float] = {
+    "queued": 10.0,
+    "starting": 8.0,
+    "preparing_transcription": 12.0,
+    "transcribing": 120.0,
+    "preparing_diarization": 12.0,
+    "diarizing": 90.0,
+    "assigning_speakers": 20.0,
+    "building_sentences": 20.0,
+    "persisting_results": 8.0,
+}
+
 
 def _cleanup_runtime_memory(step: str) -> None:
     gc.collect()
@@ -55,6 +95,143 @@ def _cleanup_runtime_memory(step: str) -> None:
 
 def utc_now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+class JobProgressReporter:
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        self.connection = connection
+
+    def set_stage(
+        self,
+        job_id: str,
+        stage: str,
+        *,
+        message: str | None = None,
+        percent: float | None = None,
+        keep_percent: bool = False,
+    ) -> None:
+        if not self._has_progress_columns():
+            return
+        now = utc_now()
+        row = self.connection.execute(
+            """
+            SELECT progress_percent
+            FROM transcription_jobs
+            WHERE id = ?
+            """,
+            (job_id,),
+        ).fetchone()
+        current_percent = float(row["progress_percent"]) if row and row["progress_percent"] is not None else None
+        if percent is None and not keep_percent:
+            percent = self._default_percent_for_stage(stage)
+        if keep_percent:
+            percent = current_percent
+        if percent is not None:
+            percent = max(0.0, min(100.0, float(percent)))
+        with transaction(self.connection):
+            self.connection.execute(
+                """
+                UPDATE transcription_jobs
+                SET progress_stage = ?,
+                    progress_percent = ?,
+                    progress_message = ?,
+                    progress_stage_started_at = ?,
+                    progress_updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    stage,
+                    percent,
+                    message or PROGRESS_STAGE_MESSAGES.get(stage, stage.replace("_", " ")),
+                    now,
+                    now,
+                    job_id,
+                ),
+            )
+
+    def mark_completed(self, job_id: str) -> None:
+        self.set_stage(job_id, "completed", percent=100.0, message=PROGRESS_STAGE_MESSAGES["completed"])
+
+    def mark_failed(self, job_id: str, error_message: str | None = None) -> None:
+        self.set_stage(job_id, "failed", message=error_message or PROGRESS_STAGE_MESSAGES["failed"], keep_percent=True)
+
+    def advance_with_heartbeat(self, job_id: str) -> None:
+        if not self._has_progress_columns():
+            return
+        row = self.connection.execute(
+            """
+            SELECT status, progress_stage, progress_percent, progress_stage_started_at
+            FROM transcription_jobs
+            WHERE id = ?
+            """,
+            (job_id,),
+        ).fetchone()
+        if row is None:
+            return
+        status = str(row["status"] or "")
+        stage = str(row["progress_stage"] or "")
+        if status not in {"queued", "processing"} or not stage:
+            return
+        if stage in {"completed", "failed"}:
+            return
+        bounds = PROGRESS_STAGE_RANGES.get(stage)
+        if bounds is None:
+            return
+        stage_start = self._parse_iso_datetime(row["progress_stage_started_at"])
+        if stage_start is None:
+            return
+        duration = PROGRESS_STAGE_DURATIONS_SECONDS.get(stage)
+        if not duration:
+            return
+        lower, upper = bounds
+        ceiling = upper - 0.15 if upper < 100.0 else upper
+        elapsed = max(0.0, (datetime.now(UTC) - stage_start).total_seconds())
+        estimate = lower + (upper - lower) * min(0.98, elapsed / duration)
+        current = float(row["progress_percent"]) if row["progress_percent"] is not None else lower
+        next_percent = min(ceiling, max(current, estimate))
+        if next_percent <= current + 0.01:
+            return
+        with transaction(self.connection):
+            self.connection.execute(
+                """
+                UPDATE transcription_jobs
+                SET progress_percent = ?, progress_updated_at = ?
+                WHERE id = ?
+                """,
+                (next_percent, utc_now(), job_id),
+            )
+
+    def _has_progress_columns(self) -> bool:
+        columns = {
+            row["name"] for row in self.connection.execute("PRAGMA table_info(transcription_jobs)").fetchall()
+        }
+        required = {
+            "progress_stage",
+            "progress_percent",
+            "progress_message",
+            "progress_stage_started_at",
+            "progress_updated_at",
+        }
+        return required.issubset(columns)
+
+    def _default_percent_for_stage(self, stage: str) -> float | None:
+        bounds = PROGRESS_STAGE_RANGES.get(stage)
+        if bounds is None:
+            return None
+        lower, upper = bounds
+        if stage == "completed":
+            return 100.0
+        if stage == "failed":
+            return None
+        return round(lower + (upper - lower) * 0.35, 2)
+
+    def _parse_iso_datetime(self, value: Any) -> datetime | None:
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(str(value))
+        except ValueError:
+            return None
 
 
 def decode_json(value: str | None, fallback: Any) -> Any:
@@ -556,6 +733,7 @@ class JobService:
                             now,
                         ),
                     )
+        JobProgressReporter(self.connection).set_stage(job_id, "queued")
         return self.get_job(job_id)
 
     def get_job(self, job_id: str) -> dict[str, Any]:
@@ -592,7 +770,12 @@ class JobService:
 
     def list_jobs_for_audio(self, audio_id: str) -> list[dict[str, Any]]:
         rows = self.connection.execute(
-            "SELECT * FROM transcription_jobs WHERE audio_file_id = ? ORDER BY created_at DESC",
+            """
+            SELECT *
+            FROM transcription_jobs
+            WHERE audio_file_id = ? AND status != 'deleted'
+            ORDER BY created_at DESC
+            """,
             (audio_id,),
         ).fetchall()
         jobs = []
@@ -939,9 +1122,11 @@ class FasterWhisperProcessor:
         self.audio = audio
         self.request = request
         self.config = config
+        self.progress = JobProgressReporter(connection)
 
     def run(self, job_id: str) -> None:
         audio_path = self.audio["file_path"]
+        self.progress.set_stage(job_id, "preparing_transcription")
         logger.debug("Processor run start job_id=%s audio_path=%s", job_id, audio_path)
         transcription_model = validate_transcription_model(
             self.request.transcription_model or DEFAULT_TRANSCRIPTION_MODEL
@@ -958,6 +1143,7 @@ class FasterWhisperProcessor:
         speaker_segments = None
         sentences = None
         try:
+            self.progress.set_stage(job_id, "transcribing")
             result = transcribe_with_faster_whisper(
                 audio_path=audio_path,
                 model_id=model_reference,
@@ -977,9 +1163,11 @@ class FasterWhisperProcessor:
                 ).get_hf_token()
             if diarization_token:
                 logger.debug("Diarization enabled job_id=%s", job_id)
+                self.progress.set_stage(job_id, "preparing_diarization")
                 diarization_model = validate_diarization_model(
                     self.request.diarization_model or DEFAULT_DIARIZATION_MODEL
                 )
+                self.progress.set_stage(job_id, "diarizing")
                 speaker_segments = diarize_with_pyannote(
                     audio_path=audio_path,
                     model_id=diarization_model,
@@ -990,11 +1178,17 @@ class FasterWhisperProcessor:
                     max_speakers=self.request.max_speakers,
                 )
                 result["segments"] = assign_speakers(result.get("segments", []), speaker_segments)
+                self.progress.set_stage(job_id, "assigning_speakers")
                 speaker_segments = None
                 _cleanup_runtime_memory("after_diarization")
             else:
                 logger.debug(
                     "Diarization token missing, applying single-speaker fallback job_id=%s", job_id
+                )
+                self.progress.set_stage(
+                    job_id,
+                    "assigning_speakers",
+                    message="Using single-speaker fallback",
                 )
                 result["segments"] = _assign_single_speaker(result.get("segments", []))
                 _cleanup_runtime_memory("after_single_speaker_assignment")
@@ -1002,7 +1196,9 @@ class FasterWhisperProcessor:
             segments = result.get("segments", [])
             logger.debug("Transcription segments prepared job_id=%s segment_count=%s", job_id, len(segments))
             if not segments:
+                self.progress.set_stage(job_id, "persisting_results")
                 self.writer.persist(job_id, [])
+                self.progress.mark_completed(job_id)
                 _cleanup_runtime_memory("after_persist_empty")
                 return
             if not _segments_have_speaker_labels(segments):
@@ -1011,9 +1207,15 @@ class FasterWhisperProcessor:
                     "pyannote model access."
                 )
 
+            self.progress.set_stage(job_id, "building_sentences")
             sentences = [sentence for segment in segments for sentence in segment_to_sentences(segment)]
+            self.progress.set_stage(job_id, "persisting_results")
             self.writer.persist(job_id, sentences)
+            self.progress.mark_completed(job_id)
             _cleanup_runtime_memory("after_persist")
+        except Exception as exc:
+            self.progress.mark_failed(job_id, str(exc))
+            raise
         finally:
             result = None
             segments = None
