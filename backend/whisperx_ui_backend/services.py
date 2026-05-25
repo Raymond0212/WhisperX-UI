@@ -1185,7 +1185,6 @@ class FasterWhisperProcessor:
                 language=self.request.language,
                 download_root=str(self.config.models_dir),
             )
-            _cleanup_runtime_memory("after_transcription")
 
             diarization_token = self.request.settings.get(
                 "diarization_token"
@@ -1219,7 +1218,6 @@ class FasterWhisperProcessor:
                 result["segments"] = assign_speakers(result.get("segments", []), speaker_segments)
                 self.progress.set_stage(job_id, "assigning_speakers")
                 speaker_segments = None
-                _cleanup_runtime_memory("after_diarization")
             else:
                 logger.debug(
                     "Diarization token missing, applying single-speaker fallback job_id=%s", job_id
@@ -1230,7 +1228,6 @@ class FasterWhisperProcessor:
                     message="Using single-speaker fallback",
                 )
                 result["segments"] = _assign_single_speaker(result.get("segments", []))
-                _cleanup_runtime_memory("after_single_speaker_assignment")
 
             segments = result.get("segments", [])
             logger.debug("Transcription segments prepared job_id=%s segment_count=%s", job_id, len(segments))
@@ -1238,7 +1235,6 @@ class FasterWhisperProcessor:
                 self.progress.set_stage(job_id, "persisting_results")
                 self.writer.persist(job_id, [])
                 self.progress.mark_completed(job_id)
-                _cleanup_runtime_memory("after_persist_empty")
                 return
             if not _segments_have_speaker_labels(segments):
                 raise RuntimeError(
@@ -1251,7 +1247,6 @@ class FasterWhisperProcessor:
             self.progress.set_stage(job_id, "persisting_results")
             self.writer.persist(job_id, sentences)
             self.progress.mark_completed(job_id)
-            _cleanup_runtime_memory("after_persist")
         except Exception as exc:
             self.progress.mark_failed(job_id, str(exc))
             raise

@@ -469,7 +469,7 @@ def test_zero_config_silent_audio_completes_with_empty_transcript(tmp_path, monk
         assert speakers == []
 
 
-def test_job_run_invokes_memory_cleanup_hooks(tmp_path, monkeypatch):
+def test_job_run_invokes_final_runtime_memory_cleanup(tmp_path, monkeypatch):
     services_module = importlib.import_module("whisperx_ui_backend.services")
     cleanup_steps: list[str] = []
 
@@ -493,10 +493,7 @@ def test_job_run_invokes_memory_cleanup_hooks(tmp_path, monkeypatch):
         job = _wait_for_terminal_job(client, job["id"])
         assert job["status"] == "completed"
 
-    assert "after_transcription" in cleanup_steps
-    assert "after_single_speaker_assignment" in cleanup_steps
-    assert "after_persist" in cleanup_steps
-    assert "processor_finalize" in cleanup_steps
+    assert cleanup_steps == ["processor_finalize"]
 
 
 def test_token_enabled_diarization_success_assigns_speaker_labels(tmp_path, monkeypatch):
