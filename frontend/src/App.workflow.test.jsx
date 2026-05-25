@@ -291,6 +291,9 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   fireEvent.click(screen.getByRole("button", { name: /upload/i }));
 
   await screen.findByDisplayValue("Demo upload");
+  expect(screen.getByRole("button", { name: /download audio/i }).dataset.downloadUrl).toBe(
+    `${API_BASE}/api/audio/audio-uploaded/download`,
+  );
   const uploadRequest = requests.find((request) => request.method === "POST" && request.path === "/api/audio");
   expect(uploadRequest.options.body.get("file").name).toBe("meeting.wav");
   expect(uploadRequest.options.body.get("display_title")).toBe("Demo upload");

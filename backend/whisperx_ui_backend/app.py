@@ -164,6 +164,13 @@ def stream_audio(audio_id: str, service: AudioService = Depends(audio_service)):
     return FileResponse(path, media_type=media_type, filename=Path(path).name)
 
 
+@app.get("/api/audio/{audio_id}/download")
+def download_audio(audio_id: str, service: AudioService = Depends(audio_service)):
+    audio = service.get_audio(audio_id)
+    path, media_type = service.stream_info(audio_id)
+    return FileResponse(path, media_type=media_type, filename=audio["original_filename"])
+
+
 @app.post("/api/jobs", response_model=JobOut)
 def create_job(request: JobCreate, service: JobService = Depends(job_service)):
     job = service.create_and_run(request)

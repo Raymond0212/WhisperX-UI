@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronDown, Pause, Play, RotateCcw, Volume2, Trash2 } from "lucide-react";
+import { ChevronDown, Download, Pause, Play, RotateCcw, Volume2, Trash2 } from "lucide-react";
 import { API_BASE } from "../api.js";
 import { runtimeDeviceIndicator } from "../jobUtils.js";
 import { TranscriptReview } from "./TranscriptReview.jsx";
@@ -79,6 +79,17 @@ export function WorkspacePanel({
                 <span className="toolbar-label">
                   {selectedAudio.latest_job_status === "completed" ? "Reprocess" : "Process"}
                 </span>
+              </button>
+              <button
+                type="button"
+                aria-label="Download audio"
+                data-download-url={`${API_BASE}/api/audio/${selectedAudio.id}/download`}
+                onClick={() => {
+                  window.location.assign(`${API_BASE}/api/audio/${selectedAudio.id}/download`);
+                }}
+              >
+                <Download size={16} />
+                <span className="toolbar-label">Download Audio</span>
               </button>
               {selectedJob ? (
                 <button
