@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import sqlite3
 import sys
+import time
 import types
 
 from fastapi.testclient import TestClient
@@ -20,8 +21,20 @@ def _upload_audio(client: TestClient) -> dict:
 
 def _client(tmp_path, monkeypatch):
     monkeypatch.setenv("WHISPERX_UI_APP_DATA", str(tmp_path / "app_data"))
+    monkeypatch.setenv("WHISPERX_UI_INLINE_JOB_EXECUTION", "1")
     app_module = importlib.import_module("whisperx_ui_backend.app")
     return TestClient(app_module.app)
+
+
+def _wait_for_terminal_job(client: TestClient, job_id: str, timeout_seconds: float = 5.0) -> dict:
+    deadline = time.time() + timeout_seconds
+    while True:
+        job = client.get(f"/api/jobs/{job_id}").json()
+        if job["status"] in {"completed", "failed", "deleted"}:
+            return job
+        if time.time() >= deadline:
+            raise AssertionError(f"Timed out waiting for terminal job status: {job}")
+        time.sleep(0.05)
 
 
 def test_model_options_exposes_phase2_registry_and_defaults(tmp_path, monkeypatch):
@@ -178,6 +191,8 @@ def test_job_create_uses_phase2_engine_fields(tmp_path, monkeypatch):
         )
         assert response.status_code == 200, response.text
         job = response.json()
+        assert job["status"] in {"queued", "processing"}
+        job = _wait_for_terminal_job(client, job["id"])
         assert job["status"] == "failed"
         assert job["transcription_engine"] == "faster-whisper"
         assert job["diarization_engine"] == "huggingface-pyannote"
@@ -191,6 +206,99 @@ def test_settings_default_to_phase2_contract(tmp_path, monkeypatch):
         assert settings["transcription_model"] == "distil-large-v3"
         assert settings["diarization_engine"] == "huggingface-pyannote"
         assert settings["diarization_model"] == "pyannote/speaker-diarization-community-1"
+        assert settings["hf_token_stored"] is False
+
+
+def test_hf_token_write_only_endpoint_stores_encrypted_secret(tmp_path, monkeypatch):
+    with _client(tmp_path, monkeypatch) as client:
+        save_response = client.post("/api/secrets/hf-token", json={"hf_token": "hf-secret-token"})
+        assert save_response.status_code == 204
+
+        # Endpoint is write-only; no read API should expose the raw token.
+        read_response = client.get("/api/secrets/hf-token")
+        assert read_response.status_code == 405
+
+        settings = client.get("/api/settings").json()
+        assert "hf_token" not in settings
+        assert "diarization_token" not in settings
+        assert settings["hf_token_stored"] is True
+
+    db_path = tmp_path / "app_data" / "database.sqlite"
+    connection = sqlite3.connect(db_path)
+    row = connection.execute(
+        "SELECT encrypted_api_key FROM provider_credentials WHERE provider = ?",
+        ("huggingface",),
+    ).fetchone()
+    connection.close()
+    assert row is not None
+    assert row[0] != "hf-secret-token"
+
+
+def test_job_uses_stored_hf_token_when_request_omits_token(tmp_path, monkeypatch):
+    services_module = importlib.import_module("whisperx_ui_backend.services")
+    diarize_calls: dict[str, str] = {}
+
+    monkeypatch.setattr(
+        services_module,
+        "transcribe_with_faster_whisper",
+        lambda **kwargs: {
+            "segments": [
+                {
+                    "start": 0.0,
+                    "end": 2.0,
+                    "text": "Hello team.",
+                    "words": [
+                        {"word": "Hello", "start": 0.0, "end": 0.7},
+                        {"word": "team.", "start": 1.0, "end": 1.8},
+                    ],
+                }
+            ]
+        },
+    )
+
+    def fake_diarize_with_pyannote(**kwargs):
+        diarize_calls["hf_token"] = kwargs["hf_token"]
+        return [{"start": 0.0, "end": 2.0, "speaker": "SPEAKER_03"}]
+
+    monkeypatch.setattr(services_module, "diarize_with_pyannote", fake_diarize_with_pyannote)
+
+    with _client(tmp_path, monkeypatch) as client:
+        save_response = client.post("/api/secrets/hf-token", json={"hf_token": "hf-saved-token"})
+        assert save_response.status_code == 204
+
+        audio = _upload_audio(client)
+        response = client.post("/api/jobs", json={"audio_file_id": audio["id"]})
+        assert response.status_code == 200, response.text
+        job = response.json()
+        assert job["status"] in {"queued", "processing"}
+        job = _wait_for_terminal_job(client, job["id"])
+        assert job["status"] == "completed"
+
+    assert diarize_calls["hf_token"] == "hf-saved-token"
+
+
+def test_prepare_basic_uses_stored_hf_token_when_request_omits_token(tmp_path, monkeypatch):
+    services_module = importlib.import_module("whisperx_ui_backend.services")
+    calls: dict[str, str | None] = {}
+
+    def fake_download_hf_snapshot(*, repo_id, local_dir, cache_dir, token):
+        calls["token"] = token
+        local_dir.mkdir(parents=True, exist_ok=True)
+        (local_dir / "model.bin").write_bytes(b"fake model")
+        return str(local_dir)
+
+    monkeypatch.setattr(services_module, "download_hf_snapshot", fake_download_hf_snapshot)
+
+    with _client(tmp_path, monkeypatch) as client:
+        save_response = client.post("/api/secrets/hf-token", json={"hf_token": "hf-stored-for-model"})
+        assert save_response.status_code == 204
+
+        response = client.post(
+            "/api/models/prepare-basic",
+            json={"profile": "basic", "transcription_model": "distil-large-v3"},
+        )
+        assert response.status_code == 200, response.text
+        assert calls["token"] == "hf-stored-for-model"
 
 
 def test_zero_config_processing_completes_without_hf_token(tmp_path, monkeypatch):
@@ -223,6 +331,8 @@ def test_zero_config_processing_completes_without_hf_token(tmp_path, monkeypatch
         response = client.post("/api/jobs", json={"audio_file_id": audio["id"]})
         assert response.status_code == 200, response.text
         job = response.json()
+        assert job["status"] in {"queued", "processing"}
+        job = _wait_for_terminal_job(client, job["id"])
         assert job["status"] == "completed"
         transcript = client.get(f"/api/jobs/{job['id']}/transcript").json()
         assert transcript[0]["speaker_key"] == "SPEAKER_00"
@@ -242,6 +352,8 @@ def test_zero_config_silent_audio_completes_with_empty_transcript(tmp_path, monk
         response = client.post("/api/jobs", json={"audio_file_id": audio["id"]})
         assert response.status_code == 200, response.text
         job = response.json()
+        assert job["status"] in {"queued", "processing"}
+        job = _wait_for_terminal_job(client, job["id"])
         assert job["status"] == "completed"
         transcript = client.get(f"/api/jobs/{job['id']}/transcript").json()
         speakers = client.get(f"/api/jobs/{job['id']}/speakers").json()
@@ -269,6 +381,8 @@ def test_job_run_invokes_memory_cleanup_hooks(tmp_path, monkeypatch):
         response = client.post("/api/jobs", json={"audio_file_id": audio["id"]})
         assert response.status_code == 200, response.text
         job = response.json()
+        assert job["status"] in {"queued", "processing"}
+        job = _wait_for_terminal_job(client, job["id"])
         assert job["status"] == "completed"
 
     assert "after_transcription" in cleanup_steps
@@ -311,6 +425,8 @@ def test_token_enabled_diarization_success_assigns_speaker_labels(tmp_path, monk
         )
         assert response.status_code == 200, response.text
         job = response.json()
+        assert job["status"] in {"queued", "processing"}
+        job = _wait_for_terminal_job(client, job["id"])
         assert job["status"] == "completed"
         transcript = client.get(f"/api/jobs/{job['id']}/transcript").json()
         assert transcript[0]["speaker_key"] == "SPEAKER_03"
@@ -437,6 +553,8 @@ def test_diarization_or_assignment_failure_propagates_to_failed_job(tmp_path, mo
         )
         assert response.status_code == 200, response.text
         job = response.json()
+        assert job["status"] in {"queued", "processing"}
+        job = _wait_for_terminal_job(client, job["id"])
         assert job["status"] == "failed"
         assert "diarization failed" in job["error_message"]
 
@@ -481,6 +599,8 @@ def test_invalid_model_validation_fails_job_cleanly(tmp_path, monkeypatch):
         )
         assert response.status_code == 200
         job = response.json()
+        assert job["status"] in {"queued", "processing"}
+        job = _wait_for_terminal_job(client, job["id"])
         assert job["status"] == "failed"
         assert "Unsupported transcription model: not-supported" in job["error_message"]
 
@@ -507,6 +627,8 @@ def test_invalid_diarization_model_validation_fails_job_cleanly(tmp_path, monkey
         )
         assert response.status_code == 200
         job = response.json()
+        assert job["status"] in {"queued", "processing"}
+        job = _wait_for_terminal_job(client, job["id"])
         assert job["status"] == "failed"
         assert "Unsupported diarization model: not-supported" in job["error_message"]
 
@@ -607,6 +729,7 @@ def test_legacy_provider_columns_still_accept_new_job_payload(tmp_path, monkeypa
     connection.close()
 
     monkeypatch.setenv("WHISPERX_UI_APP_DATA", str(data_dir))
+    monkeypatch.setenv("WHISPERX_UI_INLINE_JOB_EXECUTION", "1")
     app_module = importlib.import_module("whisperx_ui_backend.app")
     monkeypatch.setattr(app_module, "initialize_database", lambda conn: None)
     services_module = importlib.import_module("whisperx_ui_backend.services")
@@ -622,6 +745,7 @@ def test_legacy_provider_columns_still_accept_new_job_payload(tmp_path, monkeypa
         response = client.post("/api/jobs", json={"audio_file_id": audio["id"]})
         assert response.status_code == 200, response.text
         job = response.json()
+        job = _wait_for_terminal_job(client, job["id"])
         assert job["transcription_engine"] == "faster-whisper"
         assert job["diarization_engine"] == "huggingface-pyannote"
 

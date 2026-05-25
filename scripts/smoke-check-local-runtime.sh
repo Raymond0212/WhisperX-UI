@@ -28,6 +28,7 @@ export APP_DATA_DIR HF_TOKEN
 python3 - <<'PY'
 import json
 import os
+import time
 import wave
 from pathlib import Path
 
@@ -84,10 +85,16 @@ with TestClient(app) as client:
         fail(f"job create failed: {job_create.status_code} {job_create.text}")
     job_id = job_create.json()["id"]
 
-    job_state = client.get(f"/api/jobs/{job_id}")
-    if job_state.status_code != 200:
-        fail(f"job status failed: {job_state.status_code} {job_state.text}")
-    status = job_state.json().get("status")
+    deadline = time.time() + 180
+    status = None
+    while time.time() < deadline:
+        job_state = client.get(f"/api/jobs/{job_id}")
+        if job_state.status_code != 200:
+            fail(f"job status failed: {job_state.status_code} {job_state.text}")
+        status = job_state.json().get("status")
+        if status in {"completed", "failed", "deleted"}:
+            break
+        time.sleep(0.5)
     if status != "completed":
         fail(f"job did not complete: {job_state.text}")
     print("[smoke] Job completed")

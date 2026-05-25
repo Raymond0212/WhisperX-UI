@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import gc
+import hashlib
+import hmac
 import json
 import logging
 import mimetypes
+import os
 import re
 import sqlite3
 import uuid
+from base64 import urlsafe_b64decode, urlsafe_b64encode
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -106,6 +110,9 @@ def sanitize_persisted_settings(value: Any) -> Any:
         sanitized: dict[str, Any] = {}
         for key, nested_value in value.items():
             lowered = key.lower()
+            if lowered in {"diarization_token", "hf_token"}:
+                sanitized[key] = nested_value
+                continue
             if key == "online_api_keys" or any(part in lowered for part in SECRET_KEY_PARTS):
                 continue
             sanitized[key] = sanitize_persisted_settings(nested_value)
@@ -153,7 +160,8 @@ def resolve_transcription_model_reference(config: AppConfig, model_key: str) -> 
 
 
 class ModelService:
-    def __init__(self, config: AppConfig) -> None:
+    def __init__(self, connection: sqlite3.Connection, config: AppConfig) -> None:
+        self.connection = connection
         self.config = config
 
     def list_models(self) -> list[dict[str, Any]]:
@@ -182,12 +190,13 @@ class ModelService:
             local_dir = local_model_path(self.config, model_key)
             assert local_dir is not None
             local_dir.mkdir(parents=True, exist_ok=True)
+            hf_token = request.hf_token or SecretService(self.connection, self.config).get_hf_token()
             try:
                 download_hf_snapshot(
                     repo_id=str(definition["repo_id"]),
                     local_dir=local_dir,
                     cache_dir=self.config.models_dir / ".hf-cache",
-                    token=request.hf_token,
+                    token=hf_token,
                 )
             except Exception as exc:
                 raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -408,7 +417,7 @@ class JobService:
         audio_row = AudioService(self.connection, self.config).get_audio(request.audio_file_id)
         audio_path = str(audio_row.get("file_path") or "")
         logger.info(
-            "Starting transcription job audio_id=%s model=%s diarization_model=%s device=%s compute_type=%s audio_path=%s",
+            "Queueing transcription job audio_id=%s model=%s diarization_model=%s device=%s compute_type=%s audio_path=%s",
             request.audio_file_id,
             request.transcription_model,
             request.diarization_model,
@@ -426,87 +435,127 @@ class JobService:
                 for row in self.connection.execute("PRAGMA table_info(transcription_jobs)").fetchall()
             }
             has_engine_columns = "transcription_engine" in job_columns
+            has_queue_columns = "queued_at" in job_columns
             if has_engine_columns:
-                self.connection.execute(
-                    """
-                    INSERT INTO transcription_jobs (
-                        id, audio_file_id, status, transcription_engine, transcription_model,
-                        diarization_engine, diarization_model, language, device, compute_type,
-                        batch_size, speaker_count, min_speakers, max_speakers, settings_json,
-                        error_message, created_at, started_at, completed_at
+                if has_queue_columns:
+                    self.connection.execute(
+                        """
+                        INSERT INTO transcription_jobs (
+                            id, audio_file_id, status, transcription_engine, transcription_model,
+                            diarization_engine, diarization_model, language, device, compute_type,
+                            batch_size, speaker_count, min_speakers, max_speakers, settings_json,
+                            error_message, created_at, queued_at
+                        )
+                        VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+                        """,
+                        (
+                            job_id,
+                            request.audio_file_id,
+                            request.transcription_engine,
+                            request.transcription_model,
+                            request.diarization_engine,
+                            request.diarization_model,
+                            request.language,
+                            request.device,
+                            request.compute_type,
+                            request.batch_size,
+                            request.speaker_count,
+                            request.min_speakers,
+                            request.max_speakers,
+                            json.dumps(settings, sort_keys=True),
+                            now,
+                            now,
+                        ),
                     )
-                    VALUES (?, ?, 'processing', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL)
-                    """,
-                    (
-                        job_id,
-                        request.audio_file_id,
-                        request.transcription_engine,
-                        request.transcription_model,
-                        request.diarization_engine,
-                        request.diarization_model,
-                        request.language,
-                        request.device,
-                        request.compute_type,
-                        request.batch_size,
-                        request.speaker_count,
-                        request.min_speakers,
-                        request.max_speakers,
-                        json.dumps(settings, sort_keys=True),
-                        now,
-                        now,
-                    ),
-                )
+                else:
+                    self.connection.execute(
+                        """
+                        INSERT INTO transcription_jobs (
+                            id, audio_file_id, status, transcription_engine, transcription_model,
+                            diarization_engine, diarization_model, language, device, compute_type,
+                            batch_size, speaker_count, min_speakers, max_speakers, settings_json,
+                            error_message, created_at, started_at, completed_at
+                        )
+                        VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, NULL)
+                        """,
+                        (
+                            job_id,
+                            request.audio_file_id,
+                            request.transcription_engine,
+                            request.transcription_model,
+                            request.diarization_engine,
+                            request.diarization_model,
+                            request.language,
+                            request.device,
+                            request.compute_type,
+                            request.batch_size,
+                            request.speaker_count,
+                            request.min_speakers,
+                            request.max_speakers,
+                            json.dumps(settings, sort_keys=True),
+                            now,
+                        ),
+                    )
             else:
-                self.connection.execute(
-                    """
-                    INSERT INTO transcription_jobs (
-                        id, audio_file_id, status, transcription_provider, transcription_model,
-                        diarization_provider, diarization_model, language, device, compute_type,
-                        batch_size, speaker_count, min_speakers, max_speakers, settings_json,
-                        error_message, created_at, started_at, completed_at
+                if has_queue_columns:
+                    self.connection.execute(
+                        """
+                        INSERT INTO transcription_jobs (
+                            id, audio_file_id, status, transcription_provider, transcription_model,
+                            diarization_provider, diarization_model, language, device, compute_type,
+                            batch_size, speaker_count, min_speakers, max_speakers, settings_json,
+                            error_message, created_at, queued_at
+                        )
+                        VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+                        """,
+                        (
+                            job_id,
+                            request.audio_file_id,
+                            request.transcription_engine,
+                            request.transcription_model,
+                            request.diarization_engine,
+                            request.diarization_model,
+                            request.language,
+                            request.device,
+                            request.compute_type,
+                            request.batch_size,
+                            request.speaker_count,
+                            request.min_speakers,
+                            request.max_speakers,
+                            json.dumps(settings, sort_keys=True),
+                            now,
+                            now,
+                        ),
                     )
-                    VALUES (?, ?, 'processing', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL)
-                    """,
-                    (
-                        job_id,
-                        request.audio_file_id,
-                        request.transcription_engine,
-                        request.transcription_model,
-                        request.diarization_engine,
-                        request.diarization_model,
-                        request.language,
-                        request.device,
-                        request.compute_type,
-                        request.batch_size,
-                        request.speaker_count,
-                        request.min_speakers,
-                        request.max_speakers,
-                        json.dumps(settings, sort_keys=True),
-                        now,
-                        now,
-                    ),
-                )
-
-        try:
-            create_processor(self.connection, self.config, dict(audio_row), request).run(job_id)
-        except Exception as exc:
-            logger.exception(
-                "Transcription job failed job_id=%s audio_id=%s audio_path=%s",
-                job_id,
-                request.audio_file_id,
-                audio_path,
-            )
-            with transaction(self.connection):
-                self.connection.execute(
-                    """
-                    UPDATE transcription_jobs
-                    SET status = 'failed', error_message = ?, completed_at = ?
-                    WHERE id = ?
-                    """,
-                    (str(exc), utc_now(), job_id),
-                )
-        else:
-            logger.info("Transcription job completed job_id=%s", job_id)
+                else:
+                    self.connection.execute(
+                        """
+                        INSERT INTO transcription_jobs (
+                            id, audio_file_id, status, transcription_provider, transcription_model,
+                            diarization_provider, diarization_model, language, device, compute_type,
+                            batch_size, speaker_count, min_speakers, max_speakers, settings_json,
+                            error_message, created_at, started_at, completed_at
+                        )
+                        VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, NULL)
+                        """,
+                        (
+                            job_id,
+                            request.audio_file_id,
+                            request.transcription_engine,
+                            request.transcription_model,
+                            request.diarization_engine,
+                            request.diarization_model,
+                            request.language,
+                            request.device,
+                            request.compute_type,
+                            request.batch_size,
+                            request.speaker_count,
+                            request.min_speakers,
+                            request.max_speakers,
+                            json.dumps(settings, sort_keys=True),
+                            now,
+                        ),
+                    )
         return self.get_job(job_id)
 
     def get_job(self, job_id: str) -> dict[str, Any]:
@@ -532,7 +581,14 @@ class JobService:
             ).fetchone()
             if row is None:
                 raise HTTPException(status_code=404, detail="Job not found")
-            self.connection.execute("DELETE FROM transcription_jobs WHERE id = ?", (job_id,))
+            self.connection.execute(
+                """
+                UPDATE transcription_jobs
+                SET status = 'deleted', completed_at = ?, error_message = NULL
+                WHERE id = ?
+                """,
+                (utc_now(), job_id),
+            )
 
     def list_jobs_for_audio(self, audio_id: str) -> list[dict[str, Any]]:
         rows = self.connection.execute(
@@ -878,6 +934,7 @@ class FasterWhisperProcessor:
         request: JobCreate,
         config: AppConfig,
     ) -> None:
+        self.connection = connection
         self.writer = DatabaseTranscriptWriter(connection)
         self.audio = audio
         self.request = request
@@ -914,6 +971,10 @@ class FasterWhisperProcessor:
             diarization_token = self.request.settings.get(
                 "diarization_token"
             ) or self.request.settings.get("hf_token")
+            if not diarization_token:
+                diarization_token = SecretService(
+                    self.connection, self.config
+                ).get_hf_token()
             if diarization_token:
                 logger.debug("Diarization enabled job_id=%s", job_id)
                 diarization_model = validate_diarization_model(
@@ -977,6 +1038,44 @@ def create_processor(
     if request.diarization_engine != DIARIZATION_ENGINE:
         raise RuntimeError(f'Unsupported diarization_engine "{request.diarization_engine}"')
     return FasterWhisperProcessor(connection, audio, request, config)
+
+
+def run_job_execution(connection: sqlite3.Connection, config: AppConfig, job_id: str) -> None:
+    row = connection.execute(
+        """
+        SELECT j.*, a.file_path
+        FROM transcription_jobs j
+        JOIN audio_files a ON a.id = j.audio_file_id
+        WHERE j.id = ?
+        """,
+        (job_id,),
+    ).fetchone()
+    if row is None:
+        raise RuntimeError(f"Job not found: {job_id}")
+    job = dict(row)
+    persisted_settings = decode_json(job.get("settings_json"), {})
+    request_runtime_settings = {}
+    if isinstance(persisted_settings, dict):
+        nested = persisted_settings.get("settings")
+        if isinstance(nested, dict):
+            request_runtime_settings = nested
+    request = JobCreate(
+        audio_file_id=job["audio_file_id"],
+        transcription_engine=job.get("transcription_engine") or job.get("transcription_provider"),
+        transcription_model=job["transcription_model"],
+        diarization_engine=job.get("diarization_engine") or job.get("diarization_provider"),
+        diarization_model=job["diarization_model"],
+        language=job["language"],
+        device=job["device"] or "auto",
+        compute_type=job["compute_type"] or "int8",
+        batch_size=job["batch_size"] or 8,
+        speaker_count=job["speaker_count"],
+        min_speakers=job["min_speakers"],
+        max_speakers=job["max_speakers"],
+        settings=request_runtime_settings,
+    )
+    audio = {"file_path": job["file_path"]}
+    create_processor(connection, config, audio, request).run(job_id)
 
 
 class TranscriptService:
@@ -1069,10 +1168,12 @@ class SettingsService:
         "min_speakers": None,
         "max_speakers": None,
         "local_models_path": "app_data/models",
+        "max_parallel_jobs": 1,
     }
 
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: sqlite3.Connection, config: AppConfig) -> None:
         self.connection = connection
+        self.config = config
 
     def get_settings(self) -> dict[str, Any]:
         settings = dict(self.DEFAULTS)
@@ -1080,7 +1181,9 @@ class SettingsService:
         for row in rows:
             settings[row["key"]] = decode_json(row["value_json"], None)
         settings = self._sanitize_loaded_settings(settings)
-        return self._redact(settings)
+        redacted = self._redact(settings)
+        redacted["hf_token_stored"] = SecretService(self.connection, self.config).has_hf_token()
+        return redacted
 
     def update_settings(self, updates: dict[str, Any]) -> dict[str, Any]:
         now = utc_now()
@@ -1100,7 +1203,7 @@ class SettingsService:
         return self.get_settings()
 
     def _redact(self, settings: dict[str, Any]) -> dict[str, Any]:
-        return dict(settings)
+        return sanitize_persisted_settings(settings)
 
     def _sanitize_loaded_settings(self, settings: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(settings)
@@ -1116,7 +1219,112 @@ class SettingsService:
         diarization_model = normalized.get("diarization_model")
         if diarization_model not in DIARIZATION_MODEL_IDS:
             normalized["diarization_model"] = DEFAULT_DIARIZATION_MODEL
+        try:
+            max_parallel_jobs = int(normalized.get("max_parallel_jobs", 1))
+        except (TypeError, ValueError):
+            max_parallel_jobs = 1
+        normalized["max_parallel_jobs"] = min(4, max(1, max_parallel_jobs))
         return normalized
+
+
+class SecretService:
+    HUGGINGFACE_PROVIDER = "huggingface"
+
+    def __init__(self, connection: sqlite3.Connection, config: AppConfig) -> None:
+        self.connection = connection
+        self.config = config
+
+    def store_hf_token(self, hf_token: str) -> None:
+        token = hf_token.strip()
+        if not token:
+            raise HTTPException(status_code=400, detail="hf_token must be a non-empty string")
+        now = utc_now()
+        encrypted = self._encrypt(token)
+        with transaction(self.connection):
+            self.connection.execute(
+                """
+                INSERT INTO provider_credentials (
+                    id, provider, display_name, encrypted_api_key, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(provider) DO UPDATE SET
+                    encrypted_api_key = excluded.encrypted_api_key,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    str(uuid.uuid4()),
+                    self.HUGGINGFACE_PROVIDER,
+                    "Hugging Face",
+                    encrypted,
+                    now,
+                    now,
+                ),
+            )
+
+    def get_hf_token(self) -> str | None:
+        row = self.connection.execute(
+            "SELECT encrypted_api_key FROM provider_credentials WHERE provider = ?",
+            (self.HUGGINGFACE_PROVIDER,),
+        ).fetchone()
+        if row is None:
+            return None
+        return self._decrypt(str(row["encrypted_api_key"]))
+
+    def has_hf_token(self) -> bool:
+        row = self.connection.execute(
+            "SELECT 1 FROM provider_credentials WHERE provider = ? LIMIT 1",
+            (self.HUGGINGFACE_PROVIDER,),
+        ).fetchone()
+        return row is not None
+
+    def _encryption_key(self) -> bytes:
+        path = self.config.app_data_dir / ".secrets.key"
+        if path.exists():
+            return path.read_bytes()
+        key = os.urandom(32)
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        fd = os.open(path, flags, 0o600)
+        with os.fdopen(fd, "wb") as key_file:
+            key_file.write(key)
+        return key
+
+    def _encrypt(self, plaintext: str) -> str:
+        key = self._encryption_key()
+        payload = plaintext.encode("utf-8")
+        nonce = os.urandom(16)
+        enc_key = hashlib.sha256(key + b":enc").digest()
+        mac_key = hashlib.sha256(key + b":mac").digest()
+        stream = self._keystream(enc_key, nonce, len(payload))
+        ciphertext = bytes(a ^ b for a, b in zip(payload, stream, strict=True))
+        tag = hmac.new(mac_key, nonce + ciphertext, hashlib.sha256).digest()
+        return urlsafe_b64encode(nonce + ciphertext + tag).decode("ascii")
+
+    def _decrypt(self, encoded_ciphertext: str) -> str:
+        key = self._encryption_key()
+        payload = urlsafe_b64decode(encoded_ciphertext.encode("ascii"))
+        if len(payload) < 48:
+            raise RuntimeError("Stored credential payload is invalid.")
+        nonce = payload[:16]
+        tag = payload[-32:]
+        ciphertext = payload[16:-32]
+        enc_key = hashlib.sha256(key + b":enc").digest()
+        mac_key = hashlib.sha256(key + b":mac").digest()
+        expected_tag = hmac.new(mac_key, nonce + ciphertext, hashlib.sha256).digest()
+        if not hmac.compare_digest(tag, expected_tag):
+            raise RuntimeError("Stored credential integrity check failed.")
+        stream = self._keystream(enc_key, nonce, len(ciphertext))
+        plaintext = bytes(a ^ b for a, b in zip(ciphertext, stream, strict=True))
+        return plaintext.decode("utf-8")
+
+    def _keystream(self, key: bytes, nonce: bytes, length: int) -> bytes:
+        stream = bytearray()
+        counter = 0
+        while len(stream) < length:
+            counter_bytes = counter.to_bytes(8, "big", signed=False)
+            block = hashlib.sha256(key + nonce + counter_bytes).digest()
+            stream.extend(block)
+            counter += 1
+        return bytes(stream[:length])
 
 
 class VttService:

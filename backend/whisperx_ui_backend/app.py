@@ -11,9 +11,11 @@ from fastapi.responses import FileResponse, PlainTextResponse
 
 from .config import AppConfig, get_config, is_debug_enabled
 from .database import connect, initialize_database
+from .job_queue import JobQueueService
 from .schemas import (
     AudioFileOut,
     AudioUpdate,
+    HuggingFaceTokenWrite,
     JobCreate,
     JobOut,
     LocalModelOut,
@@ -30,6 +32,7 @@ from .services import (
     JobService,
     ModelService,
     SettingsService,
+    SecretService,
     SpeakerService,
     TranscriptService,
     VttService,
@@ -50,11 +53,15 @@ async def lifespan(app: FastAPI):
     )
     connection = connect(config.database_path)
     initialize_database(connection)
+    job_queue = JobQueueService(config)
+    job_queue.start()
     app.state.config = config
     app.state.connection = connection
+    app.state.job_queue = job_queue
     try:
         yield
     finally:
+        job_queue.stop()
         connection.close()
 
 
@@ -96,12 +103,20 @@ def speaker_service(connection=Depends(get_connection)) -> SpeakerService:
     return SpeakerService(connection)
 
 
-def settings_service(connection=Depends(get_connection)) -> SettingsService:
-    return SettingsService(connection)
+def settings_service(
+    connection=Depends(get_connection), config: AppConfig = Depends(get_app_config)
+) -> SettingsService:
+    return SettingsService(connection, config)
 
 
-def model_service(config: AppConfig = Depends(get_app_config)) -> ModelService:
-    return ModelService(config)
+def secret_service(
+    connection=Depends(get_connection), config: AppConfig = Depends(get_app_config)
+) -> SecretService:
+    return SecretService(connection, config)
+
+
+def model_service(connection=Depends(get_connection), config: AppConfig = Depends(get_app_config)) -> ModelService:
+    return ModelService(connection, config)
 
 
 @app.get("/api/health")
@@ -151,7 +166,9 @@ def stream_audio(audio_id: str, service: AudioService = Depends(audio_service)):
 
 @app.post("/api/jobs", response_model=JobOut)
 def create_job(request: JobCreate, service: JobService = Depends(job_service)):
-    return service.create_and_run(request)
+    job = service.create_and_run(request)
+    app.state.job_queue.wake()
+    return job
 
 
 @app.get("/api/models", response_model=list[LocalModelOut])
@@ -180,6 +197,7 @@ def get_job(job_id: str, service: JobService = Depends(job_service)):
 @app.delete("/api/jobs/{job_id}", status_code=204)
 def delete_job(job_id: str, service: JobService = Depends(job_service)):
     service.delete_job(job_id)
+    app.state.job_queue.terminate_job(job_id)
     return None
 
 
@@ -235,3 +253,11 @@ def get_settings(service: SettingsService = Depends(settings_service)):
 @app.patch("/api/settings")
 def update_settings(update: SettingsUpdate, service: SettingsService = Depends(settings_service)):
     return service.update_settings(update.settings)
+
+
+@app.post("/api/secrets/hf-token", status_code=204)
+def store_hf_token(
+    request: HuggingFaceTokenWrite, service: SecretService = Depends(secret_service)
+):
+    service.store_hf_token(request.hf_token)
+    return None

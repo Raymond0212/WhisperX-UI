@@ -6,6 +6,7 @@ Processing jobs should persist their status so the UI can display meaningful out
 
 ```text
 uploaded
+queued
 processing
 completed
 failed
@@ -14,11 +15,11 @@ deleted
 
 On success, the app should persist speakers, transcript sentences, job settings, and completion time. On failure, it should persist `failed`, an error message, and enough metadata for the user to understand which audio and settings were involved.
 
-The current backend persists failed job status and `error_message` when processor execution raises.
+The backend enqueues jobs first, then a local scheduler starts supervised model workers. Worker metadata and heartbeat fields are persisted on the job row so the API can report what happened after crashes or OOM kills.
 
 ## Processing Expectations
 
-Real-time progress is not required for MVP. The UI may show a simple processing state while the backend runs transcription and diarization.
+Real-time progress is not required for MVP. The UI may show `queued` and `processing` while the scheduler and worker run.
 
 Processing should avoid partial success states that look completed. If transcript or speaker persistence fails, the job should be treated as failed unless the implementation has an explicit recovery path.
 
@@ -67,3 +68,6 @@ For real-audio evaluation, `download-real-diarization-benchmark.sh` now bootstra
 The caveat-closure cycle achieved a network-enabled local runtime smoke pass with `./scripts/smoke-check-local-runtime.sh`: dependencies installed, the faster-whisper model downloaded into `app_data_smoke/models/`, the in-process job completed, and transcript retrieval returned a valid list payload.
 
 The token-enabled pyannote benchmark verification cycle achieved a pass with `HF_TOKEN` loaded from local environment and `./scripts/run-real-diarization-benchmark.sh` against the bootstrapped real-audio case. The passing run reported word speaker accuracy `0.956`, sentence speaker accuracy `0.829`, collar speaker-change precision `0.857`, and collar speaker-change recall `0.600` against the default thresholds.
+The scheduler should mark a job as `failed` when the worker exits unexpectedly. If exit signal is `SIGKILL`, the stored error should indicate likely out-of-memory termination.
+
+On API startup, stale `processing` jobs with missing/expired heartbeat should be reconciled to `failed`.

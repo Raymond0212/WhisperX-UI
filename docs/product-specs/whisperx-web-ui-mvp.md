@@ -189,6 +189,7 @@ MVP save behavior should use save-on-blur or short debounce autosave.
 | MC-008 | The basic local transcription model can be downloaded automatically before first local processing. |
 
 Transcription settings include `transcription_engine`, `transcription_model`, language, device, compute type, and batch size. Diarization settings include `diarization_engine`, `diarization_model`, speaker count, min speakers, max speakers, and a runtime-only token when pyannote diarization is enabled.
+Queue settings include `job_queue_mode` (`sequence` default, `parallel` optional) and `max_parallel_jobs` (`1..4`) to limit local resource pressure.
 
 ### API Keys
 

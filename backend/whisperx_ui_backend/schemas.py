@@ -5,7 +5,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-JobStatus = Literal["uploaded", "processing", "completed", "failed", "deleted"]
+JobStatus = Literal["uploaded", "queued", "processing", "completed", "failed", "deleted"]
 
 
 class AudioFileOut(BaseModel):
@@ -67,6 +67,12 @@ class JobOut(BaseModel):
     created_at: str
     started_at: str | None = None
     completed_at: str | None = None
+    queued_at: str | None = None
+    worker_pid: int | None = None
+    worker_started_at: str | None = None
+    last_heartbeat_at: str | None = None
+    worker_exit_code: int | None = None
+    worker_signal: int | None = None
 
 
 class SpeakerOut(BaseModel):
@@ -109,6 +115,10 @@ class SettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     settings: dict[str, Any] = Field(default_factory=dict)
+
+
+class HuggingFaceTokenWrite(BaseModel):
+    hf_token: str = Field(min_length=1, max_length=4096)
 
 
 class LocalModelOut(BaseModel):

@@ -68,6 +68,7 @@ test("normalizeJobSettings converts form settings into backend request values", 
     device: "auto",
     compute_type: "int8",
     batch_size: 8,
+    max_parallel_jobs: 1,
   });
   assert.deepEqual(
     normalizeJobSettings({
@@ -89,6 +90,7 @@ test("normalizeJobSettings converts form settings into backend request values", 
       device: "cpu",
       compute_type: "float32",
       batch_size: 16,
+      max_parallel_jobs: 1,
     },
   );
 });
@@ -122,6 +124,7 @@ test("buildJobRequest sends transient diarization token only when provided", () 
     device: "auto",
     compute_type: "int8",
     batch_size: 8,
+    max_parallel_jobs: 1,
     speaker_count: null,
     min_speakers: null,
     max_speakers: null,
@@ -137,6 +140,7 @@ test("buildJobRequest sends transient diarization token only when provided", () 
     device: "auto",
     compute_type: "int8",
     batch_size: 8,
+    max_parallel_jobs: 1,
     speaker_count: null,
     min_speakers: null,
     max_speakers: null,
@@ -159,6 +163,7 @@ test("buildJobRequest sends transient diarization token only when provided", () 
       device: "auto",
       compute_type: "int8",
       batch_size: 8,
+      max_parallel_jobs: 1,
       speaker_count: 2,
       min_speakers: null,
       max_speakers: 4,

@@ -10,17 +10,19 @@
 
 @media (max-width: 860px) {
   .topbar {
-    align-items: stretch;
-    border-radius: 0 0 24px 24px;
-    min-height: 5.9rem;
+    align-items: center;
+    border-radius: 0 0 18px 18px;
+    min-height: 4rem;
+    padding: 0.65rem 0.8rem;
     position: relative;
   }
 
   .brand-lockup {
-    gap: 0.2rem 0.75rem;
+    align-items: center;
+    gap: 0 0.6rem;
     grid-template-columns: auto minmax(0, 1fr);
-    padding-left: 4.15rem;
-    padding-right: 6rem;
+    padding-left: 3.55rem;
+    padding-right: 3.55rem;
   }
 
   .brand-mark {
@@ -33,33 +35,37 @@
 
   .topbar h1 {
     align-self: center;
-    font-size: clamp(1.9rem, 9.2vw, 2.75rem);
+    font-size: clamp(1.5rem, 7.2vw, 2rem);
     grid-column: 2;
     grid-row: 1;
-    line-height: 0.95;
+    line-height: 0.9;
   }
 
   .topbar p {
-    grid-column: 1 / -1;
-    margin-top: 0.22rem;
+    display: none;
   }
 
   .topbar-actions {
     position: static;
   }
 
+  .icon-button {
+    min-height: 2.25rem;
+    width: 2.25rem;
+  }
+
   .library-toggle {
     display: inline-flex;
-    left: 0.85rem;
+    left: 0.55rem;
     position: absolute;
-    top: 0.75rem;
+    top: 0.55rem;
     z-index: 2;
   }
 
   .settings-trigger {
     position: absolute;
-    right: 0.85rem;
-    top: 0.75rem;
+    right: 0.55rem;
+    top: 0.55rem;
     z-index: 2;
   }
 
@@ -106,33 +112,47 @@
 
   .workspace {
     opacity: 1;
-    overflow-y: auto;
+    overflow: hidden;
     pointer-events: auto;
     transform: none;
   }
 
   .audio-header,
   .review-header {
-    align-items: stretch;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
   }
 
-  .toolbar,
-  .segmented,
-  .review-header .export-link {
-    width: 100%;
-  }
-
-  .toolbar button,
-  .segmented button {
-    flex: 1 1 9rem;
-  }
-
-  .review-header .export-link {
-    font-size: 0.92rem;
-    min-height: 2.05rem;
-    padding: 0.35rem 0.72rem;
+  .toolbar {
     width: auto;
+  }
+
+  .toolbar button {
+    min-height: 2.25rem;
+    width: 2.25rem;
+    padding: 0;
+  }
+
+  .toolbar-label {
+    display: none;
+  }
+
+  .review-header .segmented {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .review-header .segmented button {
+    flex: 1;
+    min-height: 2.25rem;
+    padding-inline: 0.7rem;
+  }
+
+  .review-header .export-link {
+    aspect-ratio: 1;
+    min-height: 2.25rem;
+    padding: 0;
+    width: 2.25rem;
   }
 
   .sentence-row {
@@ -146,11 +166,26 @@
 
   .turn {
     grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto;
+  }
+
+  .turn > .round-play-button {
+    align-self: start;
+    grid-column: 1;
+    grid-row: 1;
   }
 
   .turn-meta,
   .turn-textbox {
-    grid-column: 1 / -1;
+    grid-column: 2;
+  }
+
+  .turn-meta {
+    grid-row: 1;
+  }
+
+  .turn-textbox {
+    grid-row: 2;
   }
 
   .settings-modal,
@@ -165,6 +200,11 @@
   .recording-settings {
     grid-template-columns: 1fr;
   }
+
+  .speaker-list .recording-settings label {
+    grid-template-columns: minmax(0, 1fr) 5.25rem;
+    margin: 0;
+  }
 }
 
 @media (max-width: 560px) {
@@ -174,10 +214,23 @@
   }
 
   .topbar h1 {
-    font-size: clamp(1.7rem, 8.4vw, 2.3rem);
+    font-size: clamp(1.35rem, 7vw, 1.75rem);
   }
 
-  .library-row,
+  .library-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .library-title-button {
+    grid-column: 1;
+    min-width: 0;
+  }
+
+  .library-status-icon {
+    grid-column: 2;
+    justify-self: end;
+  }
+
   .speaker-row {
     grid-template-columns: auto minmax(0, 1fr);
   }

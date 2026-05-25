@@ -5,6 +5,7 @@ import { formatTime } from "../jobUtils.js";
 
 export function TranscriptReview({
   job,
+  selectedAudio,
   speakers,
   sentences,
   speakerTurns,
@@ -12,9 +13,11 @@ export function TranscriptReview({
   setViewMode,
   onPlay,
   onRenameSpeaker,
+  onUpdateRecordingSettings,
   onUpdateSentence,
 }) {
-  const [isSpeakerPanelOpen, setIsSpeakerPanelOpen] = useState(true);
+  const [isSpeakerPanelOpen, setIsSpeakerPanelOpen] = useState(false);
+  const isMobile = useIsMobile();
   return (
     <div className="review">
       <section className={`speaker-panel ${isSpeakerPanelOpen ? "open" : ""}`}>
@@ -24,11 +27,12 @@ export function TranscriptReview({
           aria-expanded={isSpeakerPanelOpen}
           onClick={() => setIsSpeakerPanelOpen((current) => !current)}
         >
-          <span>Speaker labels</span>
+          <span>Speaker Settings</span>
           <ChevronDown size={17} aria-hidden="true" />
         </button>
         {isSpeakerPanelOpen && (
           <div className="speaker-list">
+            <RecordingDiarizationSettings selectedAudio={selectedAudio} onUpdateRecordingSettings={onUpdateRecordingSettings} />
             {speakers.map((speaker) => (
               <SpeakerLabelRow key={speaker.id} speaker={speaker} onPlay={onPlay} onRenameSpeaker={onRenameSpeaker} />
             ))}
@@ -56,34 +60,118 @@ export function TranscriptReview({
         <button
           type="button"
           className="export-link"
+          aria-label="Export VTT"
           data-export-url={`${API_BASE}/api/jobs/${job.id}/export.vtt`}
           onClick={() => {
             window.location.assign(`${API_BASE}/api/jobs/${job.id}/export.vtt`);
           }}
         >
-          <Download size={16} /> Export VTT
+          <Download size={16} />
+          {!isMobile && "Export VTT"}
         </button>
       </div>
 
-      {viewMode === "sentences" ? (
-        <SentenceList
-          sentences={sentences}
-          speakers={speakers}
-          onPlay={onPlay}
-          onRenameSpeaker={onRenameSpeaker}
-          onUpdateSentence={onUpdateSentence}
-        />
-      ) : (
-        <SpeakerTurnList
-          speakerTurns={speakerTurns}
-          speakers={speakers}
-          onPlay={onPlay}
-          onRenameSpeaker={onRenameSpeaker}
-          onUpdateSentence={onUpdateSentence}
-        />
-      )}
+      <div className="review-body">
+        {viewMode === "sentences" ? (
+          <SentenceList
+            sentences={sentences}
+            speakers={speakers}
+            onPlay={onPlay}
+            onRenameSpeaker={onRenameSpeaker}
+            onUpdateSentence={onUpdateSentence}
+          />
+        ) : (
+          <SpeakerTurnList
+            speakerTurns={speakerTurns}
+            speakers={speakers}
+            onPlay={onPlay}
+            onRenameSpeaker={onRenameSpeaker}
+            onUpdateSentence={onUpdateSentence}
+          />
+        )}
+      </div>
     </div>
   );
+}
+
+function RecordingDiarizationSettings({ selectedAudio, onUpdateRecordingSettings }) {
+  const [values, setValues] = useState({
+    speaker_count: selectedAudio.speaker_count ?? "",
+    min_speakers: selectedAudio.min_speakers ?? "",
+    max_speakers: selectedAudio.max_speakers ?? "",
+  });
+
+  useEffect(() => {
+    setValues({
+      speaker_count: selectedAudio.speaker_count ?? "",
+      min_speakers: selectedAudio.min_speakers ?? "",
+      max_speakers: selectedAudio.max_speakers ?? "",
+    });
+  }, [selectedAudio.id, selectedAudio.speaker_count, selectedAudio.min_speakers, selectedAudio.max_speakers]);
+
+  function handleBlur() {
+    onUpdateRecordingSettings(selectedAudio, values);
+  }
+
+  return (
+    <div className="recording-settings" aria-label="Recording diarization settings">
+      <label>
+        <span>Speaker count</span>
+        <input
+          type="number"
+          min="1"
+          max="20"
+          value={values.speaker_count}
+          onChange={(event) => setValues((current) => ({ ...current, speaker_count: event.target.value }))}
+          onBlur={handleBlur}
+        />
+      </label>
+      <label>
+        <span>Min speakers</span>
+        <input
+          type="number"
+          min="1"
+          max="20"
+          value={values.min_speakers}
+          onChange={(event) => setValues((current) => ({ ...current, min_speakers: event.target.value }))}
+          onBlur={handleBlur}
+        />
+      </label>
+      <label>
+        <span>Max speakers</span>
+        <input
+          type="number"
+          min="1"
+          max="20"
+          value={values.max_speakers}
+          onChange={(event) => setValues((current) => ({ ...current, max_speakers: event.target.value }))}
+          onBlur={handleBlur}
+        />
+      </label>
+    </div>
+  );
+}
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia("(max-width: 860px)").matches
+      : false,
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+    const media = window.matchMedia("(max-width: 860px)");
+    const onChange = (event) => setIsMobile(event.matches);
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", onChange);
+      return () => media.removeEventListener("change", onChange);
+    }
+    media.addListener(onChange);
+    return () => media.removeListener(onChange);
+  }, []);
+
+  return isMobile;
 }
 
 function SpeakerLabelRow({ speaker, onPlay, onRenameSpeaker }) {

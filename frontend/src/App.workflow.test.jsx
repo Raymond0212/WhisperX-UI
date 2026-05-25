@@ -38,6 +38,7 @@ function createApiMock({ settingsOverrides = {} } = {}) {
     error_message: "Model crashed",
   };
   const uploadedJobs = [];
+  let createdJobPollCount = 0;
   const audioItems = [failedAudio];
   let speakers = [
     {
@@ -76,6 +77,8 @@ function createApiMock({ settingsOverrides = {} } = {}) {
         diarization_engine: "huggingface-pyannote",
         diarization_model: "pyannote/speaker-diarization-community-1",
         batch_size: 8,
+        job_queue_mode: "sequence",
+        max_parallel_jobs: 1,
         hf_token_stored: false,
         ...settingsOverrides,
       });
@@ -111,6 +114,8 @@ function createApiMock({ settingsOverrides = {} } = {}) {
           device: "auto",
           compute_type: "int8",
           batch_size: 8,
+          job_queue_mode: "sequence",
+          max_parallel_jobs: 1,
         },
       });
     }
@@ -131,7 +136,30 @@ function createApiMock({ settingsOverrides = {} } = {}) {
     if (method === "POST" && path === "/api/jobs") {
       uploadedJobs.unshift(completedJob);
       uploadedAudio.latest_job_status = "completed";
+      createdJobPollCount = 0;
+      return jsonResponse({ ...completedJob, status: "queued" });
+    }
+
+    if (method === "GET" && path === "/api/jobs/job-complete") {
+      createdJobPollCount += 1;
+      if (createdJobPollCount < 2) {
+        return jsonResponse({ ...completedJob, status: "processing" });
+      }
       return jsonResponse(completedJob);
+    }
+
+    if (method === "GET" && path.startsWith("/api/jobs/") && !path.endsWith("/speakers") && !path.endsWith("/transcript")) {
+      const jobId = path.split("/").at(-1);
+      if (jobId === "job-complete") {
+        createdJobPollCount += 1;
+        if (createdJobPollCount < 2) {
+          return jsonResponse({ ...completedJob, status: "processing" });
+        }
+        return jsonResponse(completedJob);
+      }
+      if (jobId === "job-failed") {
+        return jsonResponse(failedJob);
+      }
     }
 
     if (method === "POST" && path === "/api/models/prepare-basic") {
@@ -222,6 +250,7 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   vi.stubGlobal("fetch", fetchMock);
   const play = vi.spyOn(window.HTMLMediaElement.prototype, "play").mockImplementation(() => {});
   const pause = vi.spyOn(window.HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  vi.spyOn(window, "confirm").mockReturnValue(true);
 
   render(<App />);
 
@@ -265,6 +294,7 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
     transcription_model: "distil-large-v3",
     diarization_engine: "huggingface-pyannote",
     diarization_model: "pyannote/speaker-diarization-community-1",
+    max_parallel_jobs: 1,
     settings: { diarization_token: "hf-secret" },
   });
   expect(screen.getByText(/Local model ready/)).not.toBeNull();
@@ -273,6 +303,7 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   expect(screen.getByRole("button", { name: /export vtt/i }).dataset.exportUrl).toBe(
     `${API_BASE}/api/jobs/job-complete/export.vtt`,
   );
+  fireEvent.click(screen.getByRole("button", { name: /speaker settings/i }));
   const player = document.querySelector("audio");
   fireEvent.click(screen.getByRole("button", { name: /play sample for speaker_00/i }));
   expect(player.currentTime).toBe(0);

@@ -10,6 +10,8 @@ def connect(database_path: Path) -> sqlite3.Connection:
     connection = sqlite3.connect(database_path, check_same_thread=False)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
+    connection.execute("PRAGMA journal_mode = WAL")
+    connection.execute("PRAGMA busy_timeout = 5000")
     return connection
 
 
@@ -60,8 +62,14 @@ def initialize_database(connection: sqlite3.Connection) -> None:
             settings_json TEXT NOT NULL,
             error_message TEXT,
             created_at TEXT NOT NULL,
+            queued_at TEXT,
             started_at TEXT,
-            completed_at TEXT
+            completed_at TEXT,
+            worker_pid INTEGER,
+            worker_started_at TEXT,
+            last_heartbeat_at TEXT,
+            worker_exit_code INTEGER,
+            worker_signal INTEGER
         );
 
         CREATE TABLE IF NOT EXISTS speakers (
@@ -112,6 +120,8 @@ def initialize_database(connection: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_speakers_job_id ON speakers(job_id);
         CREATE INDEX IF NOT EXISTS idx_sentences_job_id_index
             ON transcript_sentences(job_id, sentence_index);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_credentials_provider
+            ON provider_credentials(provider);
         """
     )
     audio_columns = {
@@ -120,4 +130,17 @@ def initialize_database(connection: sqlite3.Connection) -> None:
     for column_name in ("speaker_count", "min_speakers", "max_speakers"):
         if column_name not in audio_columns:
             connection.execute(f"ALTER TABLE audio_files ADD COLUMN {column_name} INTEGER")
+    job_columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(transcription_jobs)").fetchall()
+    }
+    for column_name, column_type in (
+        ("queued_at", "TEXT"),
+        ("worker_pid", "INTEGER"),
+        ("worker_started_at", "TEXT"),
+        ("last_heartbeat_at", "TEXT"),
+        ("worker_exit_code", "INTEGER"),
+        ("worker_signal", "INTEGER"),
+    ):
+        if column_name not in job_columns:
+            connection.execute(f"ALTER TABLE transcription_jobs ADD COLUMN {column_name} {column_type}")
     connection.commit()

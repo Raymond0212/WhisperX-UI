@@ -22,8 +22,11 @@
 }
 
 .review {
-  display: grid;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   gap: 0.75rem;
+  min-height: 0;
 }
 
 .review-header {
@@ -34,6 +37,7 @@
   display: flex;
   justify-content: space-between;
   padding: 0.25rem 0;
+  width: 100%;
 }
 
 .review-header .segmented {
@@ -54,6 +58,13 @@
   padding-inline: 1rem;
 }
 
+.review-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 0.3rem;
+}
+
 .speaker-list,
 .sentence-list,
 .turn-list {
@@ -65,6 +76,22 @@
   gap: 0.65rem;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
   padding: 0.35rem 0 0.9rem;
+}
+
+.speaker-list .recording-settings {
+  background: rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(76, 103, 100, 0.14);
+  border-radius: 14px;
+  grid-column: 1 / -1;
+  margin-bottom: 0.2rem;
+  padding: 0.7rem;
+}
+
+.speaker-list .recording-settings label {
+  align-items: center;
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: minmax(8rem, 1fr) minmax(0, 7rem);
 }
 
 .speaker-panel {

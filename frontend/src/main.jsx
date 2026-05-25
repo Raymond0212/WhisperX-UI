@@ -319,10 +319,29 @@ export function App() {
         }),
       ),
     });
+    let resolvedJob = job;
+    const startedAt = Date.now();
+    while (resolvedJob.status === "queued" || resolvedJob.status === "processing") {
+      if (Date.now() - startedAt > 30 * 60 * 1000) {
+        break;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+      resolvedJob = await api(`/api/jobs/${resolvedJob.id}`);
+      updateToast(processToastId, resolvedJob.status === "queued" ? "Queued..." : "Processing audio...", { duration: null });
+    }
     setJobs(await api(`/api/audio/${audioOverride.id}/jobs`));
-    await openJob(job);
+    if (resolvedJob.status === "completed") {
+      await openJob(resolvedJob);
+    } else {
+      setSelectedJob(resolvedJob);
+      setSpeakers([]);
+      setSentences([]);
+    }
     await refreshLibrary();
-    updateToast(processToastId, job.status === "completed" ? "Processing complete." : job.error_message || job.status);
+    updateToast(
+      processToastId,
+      resolvedJob.status === "completed" ? "Processing complete." : resolvedJob.error_message || resolvedJob.status,
+    );
   }
 
   async function updateSentence(sentence, currentText) {
@@ -408,7 +427,7 @@ export function App() {
           Backend service is unavailable. Start backend at <code>{API_BASE}</code>.
         </div>
       )}
-      <ToastViewport toasts={toasts} />
+      <ToastViewport toasts={toasts} onDismiss={removeToast} />
 
       <section className={layoutMode}>
         <LibraryPanel

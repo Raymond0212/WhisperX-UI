@@ -4,6 +4,8 @@
 
 WhisperX UI is a local-first web application with a React frontend and Python backend. The backend runs on the user's machine, stores metadata in SQLite, stores files on the local filesystem, and coordinates faster-whisper transcription, optional Hugging Face pyannote diarization, speaker assignment, speaker samples, and VTT export.
 
+Processing is decoupled from the API process. The FastAPI service remains the API/DB control plane, while model execution runs in supervised worker processes managed by a local SQLite-backed scheduler.
+
 ```text
 React Frontend
     -> Python API Backend

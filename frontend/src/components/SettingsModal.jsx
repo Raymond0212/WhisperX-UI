@@ -151,7 +151,7 @@ export function SettingsModal({ jobSettings, modelOptions, onChangeJobSetting, o
             <X size={18} />
           </button>
         </header>
-        <form onSubmit={onSaveSettings} key={JSON.stringify(settings)}>
+        <form id="settings-form" onSubmit={onSaveSettings} key={JSON.stringify(settings)}>
           <label>
             Diarization/HF token
             <input
@@ -175,10 +175,12 @@ export function SettingsModal({ jobSettings, modelOptions, onChangeJobSetting, o
             />
           </label>
           <SettingsFields settings={mergeJobSettings(settings)} modelOptions={modelOptions} />
-          <button type="submit">
+        </form>
+        <footer className="settings-modal-footer">
+          <button type="submit" form="settings-form">
             <Save size={16} /> Save
           </button>
-        </form>
+        </footer>
       </section>
     </div>
   );
@@ -237,6 +239,16 @@ function SettingsFields({ settings, modelOptions }) {
       <label>
         Batch size
         <input name="batch_size" type="number" min="1" max="128" defaultValue={settings.batch_size} />
+      </label>
+      <label>
+        Max parallel jobs
+        <input
+          name="max_parallel_jobs"
+          type="number"
+          min="1"
+          max="4"
+          defaultValue={settings.max_parallel_jobs || 1}
+        />
       </label>
     </>
   );

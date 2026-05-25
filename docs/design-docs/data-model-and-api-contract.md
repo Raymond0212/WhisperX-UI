@@ -44,13 +44,20 @@ Represents one processing run for an audio file.
 | `settings_json` | Serialized job settings after secret-like keys are stripped. |
 | `error_message` | Failure reason. |
 | `created_at` | Creation timestamp. |
+| `queued_at` | Queue insertion timestamp. |
 | `started_at` | Processing start timestamp. |
 | `completed_at` | Processing completion timestamp. |
+| `worker_pid` | Worker process ID when assigned. |
+| `worker_started_at` | Worker launch timestamp. |
+| `last_heartbeat_at` | Last worker heartbeat timestamp. |
+| `worker_exit_code` | Worker exit code when known. |
+| `worker_signal` | Worker signal when process was terminated by signal. |
 
 Suggested statuses:
 
 ```text
 uploaded
+queued
 processing
 completed
 failed
@@ -143,6 +150,7 @@ GET /api/audio/{audio_id}/jobs
 Responsibilities:
 
 - create and run a transcription job
+- create and enqueue a transcription job
 - return job status and metadata
 - list jobs for an audio file
 - persist failure messages when processing fails
@@ -150,6 +158,7 @@ Responsibilities:
 Current implementation notes:
 
 - Jobs use fixed engines: `transcription_engine: "faster-whisper"` and `diarization_engine: "huggingface-pyannote"`.
+- `POST /api/jobs` returns immediately with a queued/processing job; completion is retrieved via `GET /api/jobs/{job_id}` polling.
 - Request `settings` may carry transient runtime-only values such as `diarization_token` or `hf_token`; secret-like values are stripped from persisted `settings_json`.
 - Token-enabled pyannote diarization passes a preloaded `{waveform, sample_rate}` input to the pipeline. Audio decoding tries torchaudio's soundfile backend, then torchaudio's default loader, then falls back to `faster_whisper.audio.decode_audio`; multi-channel input is averaged to mono float32.
 - If a diarization token is present, pyannote diarization runs and its output is normalized into timestamped speaker intervals. The parser accepts the pyannote community wrapper's `exclusive_speaker_diarization`, falls back to `speaker_diarization`, then to raw `itertracks` annotations or interval dictionaries.
@@ -214,6 +223,7 @@ Responsibilities:
 
 - read user preferences and default model settings
 - update settings as JSON-backed values
+- queue settings include `job_queue_mode` (`sequence` or `parallel`) and `max_parallel_jobs` (`1..4`, default `1`)
 - avoid persisting plaintext API keys or token-like values
 
 ## Derived Views

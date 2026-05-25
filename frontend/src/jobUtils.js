@@ -7,6 +7,7 @@ export const DEFAULT_JOB_SETTINGS = {
   device: "auto",
   compute_type: "int8",
   batch_size: 8,
+  max_parallel_jobs: 1,
 };
 
 export function formatTime(seconds) {
@@ -54,6 +55,7 @@ export function normalizeJobSettings(settings) {
     device: settings.device || "auto",
     compute_type: settings.compute_type || "int8",
     batch_size: Number(settings.batch_size || 8),
+    max_parallel_jobs: Math.min(4, Math.max(1, Number(settings.max_parallel_jobs || 1))),
   };
 }
 
