@@ -20,7 +20,7 @@ if ! command -v uv >/dev/null 2>&1; then
   exit 1
 fi
 uv sync
-BACKEND_RUNNER=(uv run uvicorn whisperx_ui_backend.app:app --app-dir backend --reload)
+BACKEND_RUNNER=(uv run uvicorn whisperx_ui_backend.app:app --app-dir backend --reload --reload-dir backend --reload-dir tests)
 
 cd "$ROOT_DIR/frontend"
 npm install

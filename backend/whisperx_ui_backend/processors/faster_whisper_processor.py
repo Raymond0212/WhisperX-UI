@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import logging
 from dataclasses import dataclass
 from typing import Any
@@ -12,6 +13,19 @@ from ..model_registry import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _cleanup_model_memory(step: str) -> None:
+    gc.collect()
+    try:
+        import torch
+    except ImportError:
+        return
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        if hasattr(torch.cuda, "ipc_collect"):
+            torch.cuda.ipc_collect()
+    logger.debug("faster-whisper memory cleanup step=%s", step)
 
 
 @dataclass
@@ -49,48 +63,57 @@ def transcribe_with_faster_whisper(
         download_root,
         language,
     )
-    model = WhisperModel(
-        model_id,
-        device=resolved_device,
-        compute_type=compute_type,
-        download_root=download_root,
-    )
-    segments, info = model.transcribe(audio_path, language=language, word_timestamps=True)
+    model = None
+    segments = None
+    info = None
+    try:
+        model = WhisperModel(
+            model_id,
+            device=resolved_device,
+            compute_type=compute_type,
+            download_root=download_root,
+        )
+        segments, info = model.transcribe(audio_path, language=language, word_timestamps=True)
 
-    normalized_segments: list[dict[str, Any]] = []
-    for segment in segments:
-        words = []
-        for word in segment.words or []:
-            words.append(
+        normalized_segments: list[dict[str, Any]] = []
+        for segment in segments:
+            words = []
+            for word in segment.words or []:
+                words.append(
+                    {
+                        "word": word.word,
+                        "start": float(word.start),
+                        "end": float(word.end),
+                        "score": float(word.probability) if word.probability is not None else None,
+                    }
+                )
+            normalized_segments.append(
                 {
-                    "word": word.word,
-                    "start": float(word.start),
-                    "end": float(word.end),
-                    "score": float(word.probability) if word.probability is not None else None,
+                    "start": float(segment.start),
+                    "end": float(segment.end),
+                    "text": segment.text.strip(),
+                    "confidence": float(segment.avg_logprob) if segment.avg_logprob is not None else None,
+                    "words": words,
                 }
             )
-        normalized_segments.append(
-            {
-                "start": float(segment.start),
-                "end": float(segment.end),
-                "text": segment.text.strip(),
-                "confidence": float(segment.avg_logprob) if segment.avg_logprob is not None else None,
-                "words": words,
-            }
-        )
 
-    payload = {
-        "transcription_engine": TRANSCRIPTION_ENGINE,
-        "transcription_model": model_id or DEFAULT_TRANSCRIPTION_MODEL,
-        "diarization_engine": DIARIZATION_ENGINE,
-        "diarization_model": DEFAULT_DIARIZATION_MODEL,
-        "language": getattr(info, "language", language),
-        "segments": normalized_segments,
-    }
-    logger.debug(
-        "faster-whisper transcribe done model_id=%s language=%s segment_count=%s",
-        payload["transcription_model"],
-        payload["language"],
-        len(normalized_segments),
-    )
-    return payload
+        payload = {
+            "transcription_engine": TRANSCRIPTION_ENGINE,
+            "transcription_model": model_id or DEFAULT_TRANSCRIPTION_MODEL,
+            "diarization_engine": DIARIZATION_ENGINE,
+            "diarization_model": DEFAULT_DIARIZATION_MODEL,
+            "language": getattr(info, "language", language),
+            "segments": normalized_segments,
+        }
+        logger.debug(
+            "faster-whisper transcribe done model_id=%s language=%s segment_count=%s",
+            payload["transcription_model"],
+            payload["language"],
+            len(normalized_segments),
+        )
+        return payload
+    finally:
+        model = None
+        segments = None
+        info = None
+        _cleanup_model_memory("transcription")

@@ -1,9 +1,23 @@
 from __future__ import annotations
 
+import gc
 import logging
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def _cleanup_model_memory(step: str) -> None:
+    gc.collect()
+    try:
+        import torch
+    except ImportError:
+        return
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        if hasattr(torch.cuda, "ipc_collect"):
+            torch.cuda.ipc_collect()
+    logger.debug("pyannote memory cleanup step=%s", step)
 
 
 def _load_waveform_for_pyannote(audio_path: str) -> dict[str, Any]:
@@ -97,36 +111,46 @@ def diarize_with_pyannote(
             "pyannote.audio is not installed. Install dependencies before diarization."
         ) from exc
 
+    pipeline = None
+    diarization_input = None
+    diarization = None
     try:
-        pipeline = Pipeline.from_pretrained(model_id, token=hf_token)
-    except TypeError:
-        pipeline = Pipeline.from_pretrained(model_id, use_auth_token=hf_token)
+        try:
+            pipeline = Pipeline.from_pretrained(model_id, token=hf_token)
+        except TypeError:
+            pipeline = Pipeline.from_pretrained(model_id, use_auth_token=hf_token)
 
-    try:
-        import torch
-        pipeline.to(torch.device("cuda"))
-    except ImportError as exc:
-        raise RuntimeError(
-            "cuda is not available, default to cpu for pyannote diarization."
-        ) from exc
-    
-    kwargs = {
-        key: value
-        for key, value in {
-            "num_speakers": speaker_count,
-            "min_speakers": min_speakers,
-            "max_speakers": max_speakers,
-        }.items()
-        if value is not None
-    }
-    diarization_input = _load_waveform_for_pyannote(audio_path)
-    logger.debug(
-        "pyannote diarization start audio_path=%s model_id=%s kwargs=%s",
-        audio_path,
-        model_id,
-        kwargs,
-    )
-    diarization = pipeline(diarization_input, **kwargs)
-    intervals = _extract_intervals(diarization)
-    logger.debug("pyannote diarization done interval_count=%s", len(intervals))
-    return intervals
+        try:
+            import torch
+            if hasattr(pipeline, "to"):
+                pipeline.to(torch.device("cuda"))
+        except ImportError as exc:
+            raise RuntimeError(
+                "cuda is not available, default to cpu for pyannote diarization."
+            ) from exc
+
+        kwargs = {
+            key: value
+            for key, value in {
+                "num_speakers": speaker_count,
+                "min_speakers": min_speakers,
+                "max_speakers": max_speakers,
+            }.items()
+            if value is not None
+        }
+        diarization_input = _load_waveform_for_pyannote(audio_path)
+        logger.debug(
+            "pyannote diarization start audio_path=%s model_id=%s kwargs=%s",
+            audio_path,
+            model_id,
+            kwargs,
+        )
+        diarization = pipeline(diarization_input, **kwargs)
+        intervals = _extract_intervals(diarization)
+        logger.debug("pyannote diarization done interval_count=%s", len(intervals))
+        return intervals
+    finally:
+        pipeline = None
+        diarization_input = None
+        diarization = None
+        _cleanup_model_memory("diarization")

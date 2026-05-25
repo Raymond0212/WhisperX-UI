@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import json
 import logging
 import mimetypes
@@ -33,6 +34,19 @@ from .processors.speaker_assignment import assign_speakers
 from .schemas import JobCreate, ModelPrepareRequest
 
 logger = logging.getLogger(__name__)
+
+
+def _cleanup_runtime_memory(step: str) -> None:
+    gc.collect()
+    try:
+        import torch
+    except ImportError:
+        return
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        if hasattr(torch.cuda, "ipc_collect"):
+            torch.cuda.ipc_collect()
+    logger.debug("runtime memory cleanup step=%s", step)
 
 
 def utc_now() -> str:
@@ -882,54 +896,69 @@ class FasterWhisperProcessor:
             transcription_model,
             model_reference,
         )
-        result = transcribe_with_faster_whisper(
-            audio_path=audio_path,
-            model_id=model_reference,
-            device=self.request.device,
-            compute_type=self.request.compute_type,
-            language=self.request.language,
-            download_root=str(self.config.models_dir),
-        )
-
-        diarization_token = self.request.settings.get("diarization_token") or self.request.settings.get(
-            "hf_token"
-        )
-        if diarization_token:
-            logger.debug("Diarization enabled job_id=%s", job_id)
-            diarization_model = validate_diarization_model(
-                self.request.diarization_model or DEFAULT_DIARIZATION_MODEL
-            )
-            speaker_segments = diarize_with_pyannote(
+        result = None
+        segments = None
+        speaker_segments = None
+        sentences = None
+        try:
+            result = transcribe_with_faster_whisper(
                 audio_path=audio_path,
-                model_id=diarization_model,
-                hf_token=diarization_token,
+                model_id=model_reference,
                 device=self.request.device,
-                speaker_count=self.request.speaker_count,
-                min_speakers=self.request.min_speakers,
-                max_speakers=self.request.max_speakers,
+                compute_type=self.request.compute_type,
+                language=self.request.language,
+                download_root=str(self.config.models_dir),
             )
-            result["segments"] = assign_speakers(result.get("segments", []), speaker_segments)
-        else:
-            logger.debug("Diarization token missing, applying single-speaker fallback job_id=%s", job_id)
-            result["segments"] = _assign_single_speaker(result.get("segments", []))
+            _cleanup_runtime_memory("after_transcription")
 
-        segments = result.get("segments", [])
-        logger.debug("Transcription segments prepared job_id=%s segment_count=%s", job_id, len(segments))
-        if not segments:
-            self.writer.persist(job_id, [])
-            return
-        if not _segments_have_speaker_labels(segments):
-            raise RuntimeError(
-                "Diarization did not produce speaker labels. Verify Hugging Face token and "
-                "pyannote model access."
-            )
+            diarization_token = self.request.settings.get(
+                "diarization_token"
+            ) or self.request.settings.get("hf_token")
+            if diarization_token:
+                logger.debug("Diarization enabled job_id=%s", job_id)
+                diarization_model = validate_diarization_model(
+                    self.request.diarization_model or DEFAULT_DIARIZATION_MODEL
+                )
+                speaker_segments = diarize_with_pyannote(
+                    audio_path=audio_path,
+                    model_id=diarization_model,
+                    hf_token=diarization_token,
+                    device=self.request.device,
+                    speaker_count=self.request.speaker_count,
+                    min_speakers=self.request.min_speakers,
+                    max_speakers=self.request.max_speakers,
+                )
+                result["segments"] = assign_speakers(result.get("segments", []), speaker_segments)
+                speaker_segments = None
+                _cleanup_runtime_memory("after_diarization")
+            else:
+                logger.debug(
+                    "Diarization token missing, applying single-speaker fallback job_id=%s", job_id
+                )
+                result["segments"] = _assign_single_speaker(result.get("segments", []))
+                _cleanup_runtime_memory("after_single_speaker_assignment")
 
-        sentences = [
-            sentence
-            for segment in segments
-            for sentence in segment_to_sentences(segment)
-        ]
-        self.writer.persist(job_id, sentences)
+            segments = result.get("segments", [])
+            logger.debug("Transcription segments prepared job_id=%s segment_count=%s", job_id, len(segments))
+            if not segments:
+                self.writer.persist(job_id, [])
+                _cleanup_runtime_memory("after_persist_empty")
+                return
+            if not _segments_have_speaker_labels(segments):
+                raise RuntimeError(
+                    "Diarization did not produce speaker labels. Verify Hugging Face token and "
+                    "pyannote model access."
+                )
+
+            sentences = [sentence for segment in segments for sentence in segment_to_sentences(segment)]
+            self.writer.persist(job_id, sentences)
+            _cleanup_runtime_memory("after_persist")
+        finally:
+            result = None
+            segments = None
+            speaker_segments = None
+            sentences = None
+            _cleanup_runtime_memory("processor_finalize")
 
 
 def _assign_single_speaker(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
