@@ -418,6 +418,35 @@ def test_zero_config_processing_completes_without_hf_token(tmp_path, monkeypatch
         assert transcript[0]["speaker_display_name"] == "SPEAKER_00"
 
 
+def test_job_batch_size_is_passed_to_faster_whisper(tmp_path, monkeypatch):
+    services_module = importlib.import_module("whisperx_ui_backend.services")
+    transcribe_calls: dict = {}
+
+    def fake_transcribe_with_faster_whisper(**kwargs):
+        transcribe_calls.update(kwargs)
+        return {
+            "segments": [
+                {
+                    "start": 0.0,
+                    "end": 2.0,
+                    "text": "Hello team.",
+                    "words": [{"word": "Hello", "start": 0.0, "end": 0.8}],
+                }
+            ]
+        }
+
+    monkeypatch.setattr(services_module, "transcribe_with_faster_whisper", fake_transcribe_with_faster_whisper)
+
+    with _client(tmp_path, monkeypatch) as client:
+        audio = _upload_audio(client)
+        response = client.post("/api/jobs", json={"audio_file_id": audio["id"], "batch_size": 16})
+        assert response.status_code == 200, response.text
+        job = _wait_for_terminal_job(client, response.json()["id"])
+        assert job["status"] == "completed"
+
+    assert transcribe_calls["batch_size"] == 16
+
+
 def test_zero_config_silent_audio_completes_with_empty_transcript(tmp_path, monkeypatch):
     services_module = importlib.import_module("whisperx_ui_backend.services")
     monkeypatch.setattr(
@@ -1046,7 +1075,11 @@ def test_faster_whisper_resolves_cuda_to_cpu_when_cuda_unavailable(monkeypatch):
 
             return iter([]), Info()
 
-    monkeypatch.setitem(sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=FakeModel))
+    monkeypatch.setitem(
+        sys.modules,
+        "faster_whisper",
+        types.SimpleNamespace(WhisperModel=FakeModel, BatchedInferencePipeline=None),
+    )
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
 
     payload = processor_module.transcribe_with_faster_whisper(
@@ -1054,11 +1087,92 @@ def test_faster_whisper_resolves_cuda_to_cpu_when_cuda_unavailable(monkeypatch):
         model_id="distil-large-v3",
         device="cuda",
         compute_type="int8",
+        batch_size=1,
         download_root="/tmp/models",
     )
 
     assert payload["segments"] == []
     assert FakeModel.init_kwargs["device"] == "cpu"
+
+
+def test_faster_whisper_uses_batched_pipeline_for_batch_size(monkeypatch):
+    processor_module = importlib.import_module("whisperx_ui_backend.processors.faster_whisper_processor")
+    calls: dict = {}
+
+    class FakeWord:
+        word = "Hello"
+        start = 0.0
+        end = 0.5
+        probability = 0.9
+
+    class FakeSegment:
+        start = 0.0
+        end = 0.5
+        text = "Hello"
+        avg_logprob = -0.1
+        words = [FakeWord()]
+
+    class FakeInfo:
+        language = "en"
+
+    class FakeModel:
+        def __init__(self, *_args, **kwargs):
+            calls["model_kwargs"] = kwargs
+
+        def transcribe(self, *_args, **_kwargs):
+            raise AssertionError("Expected batched pipeline for batch_size > 1")
+
+    class FakeBatchedPipeline:
+        def __init__(self, model):
+            calls["pipeline_model"] = model
+
+        def transcribe(self, *_args, **kwargs):
+            calls["pipeline_kwargs"] = kwargs
+            return iter([FakeSegment()]), FakeInfo()
+
+    monkeypatch.setitem(
+        sys.modules,
+        "faster_whisper",
+        types.SimpleNamespace(WhisperModel=FakeModel, BatchedInferencePipeline=FakeBatchedPipeline),
+    )
+
+    payload = processor_module.transcribe_with_faster_whisper(
+        audio_path="/tmp/audio.wav",
+        model_id="distil-large-v3",
+        device="cpu",
+        compute_type="int8",
+        batch_size=12,
+        download_root="/tmp/models",
+    )
+
+    assert payload["segments"][0]["text"] == "Hello"
+    assert calls["pipeline_kwargs"]["batch_size"] == 12
+    assert calls["pipeline_kwargs"]["word_timestamps"] is True
+    assert calls["pipeline_kwargs"]["without_timestamps"] is False
+
+
+def test_auto_device_prefers_cuda_consistently_for_whisper_and_pyannote(monkeypatch):
+    import torch
+
+    processor_module = importlib.import_module("whisperx_ui_backend.processors.faster_whisper_processor")
+    diarization_module = importlib.import_module("whisperx_ui_backend.processors.pyannote_diarization")
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+
+    assert processor_module.resolve_transcription_device("auto") == "cuda"
+    assert diarization_module.resolve_diarization_device("auto") == "cuda"
+    assert processor_module.resolve_transcription_device("cuda") == "cuda"
+    assert diarization_module.resolve_diarization_device("cuda") == "cuda"
+
+
+def test_auto_device_falls_back_to_cpu_when_cuda_unavailable(monkeypatch):
+    import torch
+
+    processor_module = importlib.import_module("whisperx_ui_backend.processors.faster_whisper_processor")
+    diarization_module = importlib.import_module("whisperx_ui_backend.processors.pyannote_diarization")
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+    assert processor_module.resolve_transcription_device("auto") == "cpu"
+    assert diarization_module.resolve_diarization_device("auto") == "cpu"
 
 
 def test_pyannote_resolves_cuda_to_cpu_when_cuda_unavailable(tmp_path, monkeypatch):

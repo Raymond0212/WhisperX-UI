@@ -38,17 +38,17 @@ class TranscriptWord:
 
 
 def resolve_transcription_device(device: str) -> str:
-    if device == "auto":
-        return "cpu"
-    if device != "cuda":
+    if device == "cpu":
+        return device
+    if device not in {"auto", "cuda"}:
         return device
     try:
         import torch
     except ImportError:
-        logger.warning("Requested CUDA transcription but torch is unavailable; falling back to CPU.")
+        logger.warning("Requested CUDA-capable transcription but torch is unavailable; falling back to CPU.")
         return "cpu"
     if not torch.cuda.is_available():
-        logger.warning("Requested CUDA transcription but CUDA is unavailable; falling back to CPU.")
+        logger.warning("Requested CUDA-capable transcription but CUDA is unavailable; falling back to CPU.")
         return "cpu"
     return "cuda"
 
@@ -63,27 +63,31 @@ def transcribe_with_faster_whisper(
     model_id: str = DEFAULT_TRANSCRIPTION_MODEL,
     device: str = "auto",
     compute_type: str = "int8",
+    batch_size: int = 8,
     language: str | None = None,
     download_root: str,
 ) -> dict[str, Any]:
     try:
-        from faster_whisper import WhisperModel
+        from faster_whisper import BatchedInferencePipeline, WhisperModel
     except ImportError as exc:
         raise RuntimeError(
             "faster-whisper is not installed. Install dependencies before transcription."
         ) from exc
 
     resolved_device = _resolve_device(device)
+    resolved_batch_size = max(1, int(batch_size or 1))
     logger.debug(
-        "faster-whisper transcribe start audio_path=%s model_id=%s device=%s compute_type=%s download_root=%s language=%s",
+        "faster-whisper transcribe start audio_path=%s model_id=%s device=%s compute_type=%s batch_size=%s download_root=%s language=%s",
         audio_path,
         model_id,
         resolved_device,
         compute_type,
+        resolved_batch_size,
         download_root,
         language,
     )
     model = None
+    pipeline = None
     segments = None
     info = None
     try:
@@ -93,7 +97,17 @@ def transcribe_with_faster_whisper(
             compute_type=compute_type,
             download_root=download_root,
         )
-        segments, info = model.transcribe(audio_path, language=language, word_timestamps=True)
+        if resolved_batch_size > 1:
+            pipeline = BatchedInferencePipeline(model)
+            segments, info = pipeline.transcribe(
+                audio_path,
+                language=language,
+                word_timestamps=True,
+                without_timestamps=False,
+                batch_size=resolved_batch_size,
+            )
+        else:
+            segments, info = model.transcribe(audio_path, language=language, word_timestamps=True)
 
         normalized_segments: list[dict[str, Any]] = []
         for segment in segments:
@@ -133,6 +147,7 @@ def transcribe_with_faster_whisper(
         )
         return payload
     finally:
+        pipeline = None
         model = None
         segments = None
         info = None

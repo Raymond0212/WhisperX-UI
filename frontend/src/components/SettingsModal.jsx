@@ -237,7 +237,7 @@ function SettingsFields({ settings, modelOptions }) {
         </select>
       </label>
       <label>
-        Batch size
+        Transcription batch size
         <input name="batch_size" type="number" min="1" max="128" defaultValue={settings.batch_size} />
       </label>
       <label>

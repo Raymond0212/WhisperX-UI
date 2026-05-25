@@ -100,10 +100,10 @@ def resolve_diarization_device(device: str) -> str:
 
     if device == "cpu":
         return "cpu"
-    if device == "cuda":
+    if device in {"auto", "cuda"}:
         if torch.cuda.is_available():
             return "cuda"
-        logger.warning("Requested CUDA diarization but CUDA is unavailable; falling back to CPU.")
+        logger.warning("Requested CUDA-capable diarization but CUDA is unavailable; falling back to CPU.")
         return "cpu"
     if torch.cuda.is_available():
         return "cuda"

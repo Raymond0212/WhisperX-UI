@@ -95,10 +95,10 @@ export function runtimeDeviceIndicator(job) {
   const runtimeDevice = String(job.runtime_device || "").toLowerCase();
   const requestedDevice = String(job.device || "auto").toLowerCase();
   const note = String(job.runtime_device_note || "").toLowerCase();
-  if (note === "fell_back_to_cpu" || (requestedDevice === "cuda" && runtimeDevice === "cpu")) {
+  if (note === "fell_back_to_cpu" || (["auto", "cuda"].includes(requestedDevice) && runtimeDevice === "cpu")) {
     return "Fell back to CPU";
   }
-  const device = runtimeDevice || (requestedDevice === "cuda" ? "cuda" : "cpu");
+  const device = runtimeDevice || (["auto", "cuda"].includes(requestedDevice) ? "cuda" : "cpu");
   if (device === "cuda") return "CUDA";
   if (device === "cpu" || device === "auto") return "CPU";
   return device.toUpperCase();

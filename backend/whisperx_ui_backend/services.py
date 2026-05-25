@@ -248,7 +248,7 @@ def set_runtime_device(
         return
     requested = (requested_device or "auto").lower()
     resolved = (runtime_device or "cpu").lower()
-    note = "fell_back_to_cpu" if requested == "cuda" and resolved == "cpu" else None
+    note = "fell_back_to_cpu" if requested in {"auto", "cuda"} and resolved == "cpu" else None
     with transaction(connection):
         connection.execute(
             """
@@ -1181,6 +1181,7 @@ class FasterWhisperProcessor:
                 model_id=model_reference,
                 device=self.request.device,
                 compute_type=self.request.compute_type,
+                batch_size=self.request.batch_size,
                 language=self.request.language,
                 download_root=str(self.config.models_dir),
             )
