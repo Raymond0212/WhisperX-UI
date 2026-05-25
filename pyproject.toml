@@ -45,8 +45,12 @@ target-version = "py311"
 
 
 [tool.uv.sources]
-torch = { index = "pytorch-cu126" }
-torchaudio = { index = "pytorch-cu126" }
+torch = [
+    { index = "pytorch-cu126", marker = "platform_system != 'Darwin'" },
+]
+torchaudio = [
+    { index = "pytorch-cu126", marker = "platform_system != 'Darwin'" },
+]
 
 [[tool.uv.index]]
 name = "pytorch-cu126"
