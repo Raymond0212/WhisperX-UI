@@ -17,6 +17,7 @@ from .database import connect, transaction
 from .services import JobProgressReporter, run_job_execution
 
 logger = logging.getLogger(__name__)
+WORKER_HEARTBEAT_TIMEOUT_SECONDS = 30
 
 
 def utc_now() -> str:
@@ -63,6 +64,7 @@ class JobQueueService:
         self._reconcile_stale_processing_jobs()
         while not self._stop_event.is_set():
             self._poll_workers()
+            self._terminate_reconciled_workers(self._reconcile_stale_processing_jobs())
             self._start_workers_if_capacity()
             self._wake_event.wait(timeout=1.0)
             self._wake_event.clear()
@@ -178,6 +180,14 @@ class JobQueueService:
         for job_id in done_job_ids:
             self._workers.pop(job_id, None)
 
+    def _terminate_reconciled_workers(self, job_ids: list[str]) -> None:
+        for job_id in job_ids:
+            process = self._workers.pop(job_id, None)
+            if process is None or process.poll() is not None:
+                continue
+            logger.warning("Terminating unresponsive worker for stale job_id=%s", job_id)
+            process.terminate()
+
     def _handle_worker_exit(self, job_id: str, return_code: int) -> None:
         connection = connect(self.config.database_path)
         try:
@@ -231,15 +241,16 @@ class JobQueueService:
         finally:
             connection.close()
 
-    def _reconcile_stale_processing_jobs(self) -> None:
+    def _reconcile_stale_processing_jobs(self) -> list[str]:
         connection = connect(self.config.database_path)
-        stale_before = datetime.now(UTC) - timedelta(seconds=30)
+        stale_before = datetime.now(UTC) - timedelta(seconds=WORKER_HEARTBEAT_TIMEOUT_SECONDS)
+        reconciled_job_ids: list[str] = []
         try:
             job_columns = {
                 row["name"] for row in connection.execute("PRAGMA table_info(transcription_jobs)").fetchall()
             }
             if "last_heartbeat_at" not in job_columns:
-                return
+                return reconciled_job_ids
             rows = connection.execute(
                 """
                 SELECT id, last_heartbeat_at
@@ -258,8 +269,9 @@ class JobQueueService:
                         stale = True
                 if not stale:
                     continue
+                job_id = str(row["id"])
                 with transaction(connection):
-                    connection.execute(
+                    result = connection.execute(
                         """
                         UPDATE transcription_jobs
                         SET status = 'failed',
@@ -268,9 +280,12 @@ class JobQueueService:
                             worker_exit_code = COALESCE(worker_exit_code, -1)
                         WHERE id = ? AND status = 'processing'
                         """,
-                        ("Worker heartbeat lost before completion.", utc_now(), str(row["id"])),
+                        ("Worker heartbeat lost before completion.", utc_now(), job_id),
                     )
-                JobProgressReporter(connection).mark_failed(str(row["id"]), "Worker heartbeat lost before completion.")
+                if result.rowcount:
+                    reconciled_job_ids.append(job_id)
+                JobProgressReporter(connection).mark_failed(job_id, "Worker heartbeat lost before completion.")
+            return reconciled_job_ids
         finally:
             connection.close()
 

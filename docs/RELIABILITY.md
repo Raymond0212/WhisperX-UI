@@ -72,4 +72,4 @@ The caveat-closure cycle achieved a network-enabled local runtime smoke pass wit
 The token-enabled pyannote benchmark verification cycle achieved a pass with `HF_TOKEN` loaded from local environment and `./scripts/run-real-diarization-benchmark.sh` against the bootstrapped real-audio case. The passing run reported word speaker accuracy `0.956`, sentence speaker accuracy `0.829`, collar speaker-change precision `0.857`, and collar speaker-change recall `0.600` against the default thresholds.
 The scheduler should mark a job as `failed` when the worker exits unexpectedly. If exit signal is `SIGKILL`, the stored error should indicate likely out-of-memory termination.
 
-On API startup, stale `processing` jobs with missing/expired heartbeat should be reconciled to `failed`.
+On API startup and during scheduler polling, stale `processing` jobs with missing/expired heartbeat should be reconciled to `failed`. If the scheduler still has a local worker handle for that job, it should terminate and unregister the unresponsive handle so queued work is not blocked behind a silent worker.
