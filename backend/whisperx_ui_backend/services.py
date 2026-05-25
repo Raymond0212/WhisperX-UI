@@ -32,8 +32,8 @@ from .model_registry import (
     validate_diarization_model,
     validate_transcription_model,
 )
-from .processors.faster_whisper_processor import transcribe_with_faster_whisper
-from .processors.pyannote_diarization import diarize_with_pyannote
+from .processors.faster_whisper_processor import resolve_transcription_device, transcribe_with_faster_whisper
+from .processors.pyannote_diarization import resolve_diarization_device, diarize_with_pyannote
 from .processors.speaker_assignment import assign_speakers
 from .schemas import JobCreate, ModelPrepareRequest
 
@@ -232,6 +232,32 @@ class JobProgressReporter:
             return datetime.fromisoformat(str(value))
         except ValueError:
             return None
+
+
+def set_runtime_device(
+    connection: sqlite3.Connection,
+    job_id: str,
+    *,
+    requested_device: str | None,
+    runtime_device: str,
+) -> None:
+    columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(transcription_jobs)").fetchall()
+    }
+    if not {"runtime_device", "runtime_device_note"}.issubset(columns):
+        return
+    requested = (requested_device or "auto").lower()
+    resolved = (runtime_device or "cpu").lower()
+    note = "fell_back_to_cpu" if requested == "cuda" and resolved == "cpu" else None
+    with transaction(connection):
+        connection.execute(
+            """
+            UPDATE transcription_jobs
+            SET runtime_device = ?, runtime_device_note = ?
+            WHERE id = ?
+            """,
+            (resolved, note, job_id),
+        )
 
 
 def decode_json(value: str | None, fallback: Any) -> Any:
@@ -1143,6 +1169,12 @@ class FasterWhisperProcessor:
         speaker_segments = None
         sentences = None
         try:
+            set_runtime_device(
+                self.connection,
+                job_id,
+                requested_device=self.request.device,
+                runtime_device=resolve_transcription_device(self.request.device),
+            )
             self.progress.set_stage(job_id, "transcribing")
             result = transcribe_with_faster_whisper(
                 audio_path=audio_path,
@@ -1166,6 +1198,12 @@ class FasterWhisperProcessor:
                 self.progress.set_stage(job_id, "preparing_diarization")
                 diarization_model = validate_diarization_model(
                     self.request.diarization_model or DEFAULT_DIARIZATION_MODEL
+                )
+                set_runtime_device(
+                    self.connection,
+                    job_id,
+                    requested_device=self.request.device,
+                    runtime_device=resolve_diarization_device(self.request.device),
                 )
                 self.progress.set_stage(job_id, "diarizing")
                 speaker_segments = diarize_with_pyannote(

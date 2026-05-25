@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ChevronDown, Download, Play } from "lucide-react";
 import { API_BASE } from "../api.js";
-import { formatTime } from "../jobUtils.js";
+import { formatTime, runtimeDeviceIndicator } from "../jobUtils.js";
 
 export function TranscriptReview({
   job,
@@ -24,6 +24,7 @@ export function TranscriptReview({
     ? Math.max(0, Math.min(100, Number(job.progress_percent)))
     : null;
   const progressLabel = job.progress_message || (job.status === "queued" ? "Queued" : "Processing audio");
+  const deviceIndicator = runtimeDeviceIndicator(job);
   return (
     <div className="review">
       <section className={`speaker-panel ${isSpeakerPanelOpen ? "open" : ""}`}>
@@ -84,7 +85,10 @@ export function TranscriptReview({
           <section className="transcription-progress" aria-label="Transcription progress">
             <div className="transcription-progress-meta">
               <strong>{progressLabel}</strong>
-              <span>{progressPercent === null ? "" : `${Math.round(progressPercent)}%`}</span>
+              <span className="transcription-progress-status">
+                {deviceIndicator && <span className="runtime-device-pill">{deviceIndicator}</span>}
+                <span>{progressPercent === null ? "" : `${Math.round(progressPercent)}%`}</span>
+              </span>
             </div>
             <div className="transcription-progress-track" aria-hidden="true">
               <div

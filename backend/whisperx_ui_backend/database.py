@@ -140,6 +140,8 @@ def initialize_database(connection: sqlite3.Connection) -> None:
         ("last_heartbeat_at", "TEXT"),
         ("worker_exit_code", "INTEGER"),
         ("worker_signal", "INTEGER"),
+        ("runtime_device", "TEXT"),
+        ("runtime_device_note", "TEXT"),
         ("progress_stage", "TEXT"),
         ("progress_percent", "REAL"),
         ("progress_message", "TEXT"),

@@ -91,7 +91,7 @@ def _extract_intervals(diarization: Any) -> list[dict[str, Any]]:
     raise RuntimeError("Unsupported pyannote diarization output format.")
 
 
-def _resolve_pipeline_device(device: str) -> str:
+def resolve_diarization_device(device: str) -> str:
     try:
         import torch
     except ImportError:
@@ -108,6 +108,10 @@ def _resolve_pipeline_device(device: str) -> str:
     if torch.cuda.is_available():
         return "cuda"
     return "cpu"
+
+
+def _resolve_pipeline_device(device: str) -> str:
+    return resolve_diarization_device(device)
 
 
 def diarize_with_pyannote(

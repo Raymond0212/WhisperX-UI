@@ -1,6 +1,7 @@
 import React from "react";
 import { ChevronDown, Pause, Play, RotateCcw, Volume2, Trash2 } from "lucide-react";
 import { API_BASE } from "../api.js";
+import { runtimeDeviceIndicator } from "../jobUtils.js";
 import { TranscriptReview } from "./TranscriptReview.jsx";
 
 export function WorkspacePanel({
@@ -156,6 +157,7 @@ function JobProgress({ job }) {
   const rawValue = Number(job.progress_percent);
   const value = Number.isFinite(rawValue) ? Math.max(0, Math.min(100, rawValue)) : 0;
   const label = job.progress_message || (job.status === "queued" ? "Queued" : "Processing");
+  const deviceIndicator = runtimeDeviceIndicator(job);
   return (
     <div className="job-progress" aria-live="polite">
       <div
@@ -168,7 +170,10 @@ function JobProgress({ job }) {
       >
         <span className="job-progress__fill" style={{ width: `${value}%` }} />
       </div>
-      <p className="job-progress__label">{label}</p>
+      <p className="job-progress__label">
+        <span>{label}</span>
+        {deviceIndicator && <span className="runtime-device-pill">{deviceIndicator}</span>}
+      </p>
     </div>
   );
 }

@@ -37,7 +37,7 @@ class TranscriptWord:
     speaker: str | None = None
 
 
-def _resolve_device(device: str) -> str:
+def resolve_transcription_device(device: str) -> str:
     if device == "auto":
         return "cpu"
     if device != "cuda":
@@ -51,6 +51,10 @@ def _resolve_device(device: str) -> str:
         logger.warning("Requested CUDA transcription but CUDA is unavailable; falling back to CPU.")
         return "cpu"
     return "cuda"
+
+
+def _resolve_device(device: str) -> str:
+    return resolve_transcription_device(device)
 
 
 def transcribe_with_faster_whisper(

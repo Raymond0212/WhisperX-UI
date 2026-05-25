@@ -733,7 +733,7 @@ def test_settings_sanitize_legacy_or_invalid_models_to_phase2_defaults(tmp_path,
         assert settings["diarization_model"] == "pyannote/speaker-diarization-community-1"
 
 
-def test_database_initialization_adds_progress_columns(tmp_path, monkeypatch):
+def test_database_initialization_adds_progress_and_runtime_device_columns(tmp_path, monkeypatch):
     with _client(tmp_path, monkeypatch):
         db_path = tmp_path / "app_data" / "database.sqlite"
         connection = sqlite3.connect(db_path)
@@ -749,8 +749,60 @@ def test_database_initialization_adds_progress_columns(tmp_path, monkeypatch):
         "progress_message",
         "progress_stage_started_at",
         "progress_updated_at",
+        "runtime_device",
+        "runtime_device_note",
     ):
         assert column in columns
+
+
+def test_job_response_exposes_runtime_device_fallback(tmp_path, monkeypatch):
+    services_module = importlib.import_module("whisperx_ui_backend.services")
+    with _client(tmp_path, monkeypatch) as client:
+        audio = _upload_audio(client)
+        job_id = str(uuid.uuid4())
+        now = _utc_now()
+        connection = client.app.state.connection
+        connection.execute(
+            """
+            INSERT INTO transcription_jobs (
+                id, audio_file_id, status, transcription_engine, transcription_model,
+                diarization_engine, diarization_model, language, device, compute_type,
+                batch_size, speaker_count, min_speakers, max_speakers, settings_json,
+                error_message, created_at, queued_at
+            ) VALUES (?, ?, 'processing', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+            """,
+            (
+                job_id,
+                audio["id"],
+                "faster-whisper",
+                "distil-large-v3",
+                "huggingface-pyannote",
+                "pyannote/speaker-diarization-community-1",
+                None,
+                "cuda",
+                "int8",
+                8,
+                None,
+                None,
+                None,
+                "{}",
+                now,
+                now,
+            ),
+        )
+        connection.commit()
+        services_module.set_runtime_device(
+            connection,
+            job_id,
+            requested_device="cuda",
+            runtime_device="cpu",
+        )
+
+        response = client.get(f"/api/jobs/{job_id}")
+        assert response.status_code == 200
+        job = response.json()
+        assert job["runtime_device"] == "cpu"
+        assert job["runtime_device_note"] == "fell_back_to_cpu"
 
 
 def test_legacy_provider_columns_still_accept_new_job_payload(tmp_path, monkeypatch):

@@ -11,6 +11,7 @@ import {
   groupSpeakerTurns,
   mergeJobSettings,
   normalizeJobSettings,
+  runtimeDeviceIndicator,
 } from "./jobUtils.js";
 
 test("formatTime floors seconds and clamps negative values", () => {
@@ -171,6 +172,16 @@ test("buildJobRequest sends transient diarization token only when provided", () 
   );
 
   assert.equal("settings" in buildJobRequest("audio-3", { diarization_token: "   " }), false);
+});
+
+test("runtimeDeviceIndicator formats CPU, CUDA, and CUDA fallback states", () => {
+  assert.equal(runtimeDeviceIndicator({ device: "cpu" }), "CPU");
+  assert.equal(runtimeDeviceIndicator({ device: "auto" }), "CPU");
+  assert.equal(runtimeDeviceIndicator({ device: "cuda", runtime_device: "cuda" }), "CUDA");
+  assert.equal(
+    runtimeDeviceIndicator({ device: "cuda", runtime_device: "cpu", runtime_device_note: "fell_back_to_cpu" }),
+    "Fell back to CPU",
+  );
 });
 
 test("applySpeakerRename updates speaker list and all matching transcript display labels", () => {

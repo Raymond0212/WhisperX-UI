@@ -73,6 +73,8 @@ class JobOut(BaseModel):
     last_heartbeat_at: str | None = None
     worker_exit_code: int | None = None
     worker_signal: int | None = None
+    runtime_device: str | None = None
+    runtime_device_note: str | None = None
     progress_stage: str | None = None
     progress_percent: float | None = None
     progress_message: str | None = None
