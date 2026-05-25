@@ -348,6 +348,14 @@ export function App() {
     event.preventDefault();
     const form = event.currentTarget;
     const nextSettings = Object.fromEntries(new FormData(form).entries());
+    const hfToken = String(nextSettings.diarization_token || "").trim();
+    if (hfToken) {
+      await api("/api/secrets/hf-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hf_token: hfToken }),
+      });
+    }
     const normalized = normalizeJobSettings(nextSettings);
     const saved = await api("/api/settings", {
       method: "PATCH",
@@ -355,7 +363,12 @@ export function App() {
       body: JSON.stringify({ settings: normalized }),
     });
     setSettings(saved);
-    setJobSettings((current) => mergeJobSettings({ ...saved, diarization_token: current.diarization_token || "" }));
+    setJobSettings((current) =>
+      mergeJobSettings({
+        ...saved,
+        diarization_token: hfToken ? "" : current.diarization_token || "",
+      }),
+    );
     notify("Settings saved.");
     setIsSettingsOpen(false);
   }

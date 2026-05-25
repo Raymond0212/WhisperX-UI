@@ -13,7 +13,7 @@ function jsonResponse(data, status = 200) {
   });
 }
 
-function createApiMock() {
+function createApiMock({ settingsOverrides = {} } = {}) {
   const requests = [];
   const uploadedAudio = {
     id: "audio-uploaded",
@@ -76,6 +76,8 @@ function createApiMock() {
         diarization_engine: "huggingface-pyannote",
         diarization_model: "pyannote/speaker-diarization-community-1",
         batch_size: 8,
+        hf_token_stored: false,
+        ...settingsOverrides,
       });
     }
 
@@ -333,4 +335,60 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   });
   expect(await screen.findByRole("button", { name: /delete audio/i })).not.toBeNull();
   expect(screen.getAllByText("Demo upload").length).toBeGreaterThan(0);
+});
+
+test("uses stored backend HF token without sending token from frontend payloads", async () => {
+  const { fetchMock, requests } = createApiMock({ settingsOverrides: { hf_token_stored: true } });
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(<App />);
+  expect(await screen.findByText("Broken clip")).not.toBeNull();
+
+  fireEvent.click(screen.getByRole("button", { name: /open settings/i }));
+  const maskedTokenInput = screen.getByLabelText("Diarization/HF token");
+  expect(maskedTokenInput.value).toBe("••••••••••••");
+  expect(maskedTokenInput.disabled).toBe(false);
+
+  const copyEvent = new Event("copy", { bubbles: true, cancelable: true });
+  maskedTokenInput.dispatchEvent(copyEvent);
+  expect(copyEvent.defaultPrevented).toBe(true);
+
+  const cutEvent = new Event("cut", { bubbles: true, cancelable: true });
+  maskedTokenInput.dispatchEvent(cutEvent);
+  expect(cutEvent.defaultPrevented).toBe(true);
+
+  const copyShortcutEvent = new KeyboardEvent("keydown", {
+    bubbles: true,
+    cancelable: true,
+    key: "c",
+    ctrlKey: true,
+  });
+  maskedTokenInput.dispatchEvent(copyShortcutEvent);
+  expect(copyShortcutEvent.defaultPrevented).toBe(true);
+
+  const pasteEvent = new Event("paste", { bubbles: true, cancelable: true });
+  maskedTokenInput.dispatchEvent(pasteEvent);
+  expect(pasteEvent.defaultPrevented).toBe(false);
+
+  fireEvent.click(screen.getByRole("button", { name: /close settings/i }));
+
+  const file = new File(["demo audio"], "meeting.wav", { type: "audio/wav" });
+  fireEvent.change(screen.getByLabelText("Audio file"), { target: { files: [file] } });
+  fireEvent.change(screen.getByPlaceholderText("Optional display title"), {
+    target: { value: "Demo upload" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /upload/i }));
+  await screen.findByDisplayValue("Demo upload");
+  fireEvent.click(screen.getByRole("button", { name: /^process$/i }));
+  await screen.findByText("Processing complete.");
+
+  const modelRequest = requests.find(
+    (request) => request.method === "POST" && request.path === "/api/models/prepare-basic",
+  );
+  expect(JSON.parse(modelRequest.options.body)).toEqual({
+    profile: "basic",
+    transcription_model: "distil-large-v3",
+  });
+  const jobRequest = requests.find((request) => request.method === "POST" && request.path === "/api/jobs");
+  expect(JSON.parse(jobRequest.options.body).settings).toBeUndefined();
 });

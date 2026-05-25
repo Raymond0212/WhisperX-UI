@@ -118,6 +118,21 @@ const LANGUAGE_OPTIONS = [
 ];
 
 export function SettingsModal({ jobSettings, modelOptions, onChangeJobSetting, onClose, onSaveSettings, settings }) {
+  const hasStoredToken = Boolean(settings?.hf_token_stored);
+  const isMaskingStoredToken = hasStoredToken && !jobSettings.diarization_token;
+
+  function preventCopyOut(event) {
+    event.preventDefault();
+  }
+
+  function blockCopyCutShortcuts(event) {
+    if (!(event.metaKey || event.ctrlKey)) return;
+    const key = event.key.toLowerCase();
+    if (key === "c" || key === "x") {
+      event.preventDefault();
+    }
+  }
+
   return (
     <div className="modal-backdrop modal-backdrop--settings" role="presentation" onMouseDown={onClose}>
       <section
@@ -142,9 +157,21 @@ export function SettingsModal({ jobSettings, modelOptions, onChangeJobSetting, o
             <input
               name="diarization_token"
               type="password"
-              value={jobSettings.diarization_token || ""}
-              onChange={(event) => onChangeJobSetting("diarization_token", event.target.value)}
-              placeholder="Optional (enables pyannote diarization)"
+              aria-label="Diarization/HF token"
+              value={isMaskingStoredToken ? "••••••••••••" : jobSettings.diarization_token || ""}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (isMaskingStoredToken) {
+                  onChangeJobSetting("diarization_token", value.replace(/^•+/, ""));
+                  return;
+                }
+                onChangeJobSetting("diarization_token", value);
+              }}
+              onCopy={preventCopyOut}
+              onCut={preventCopyOut}
+              onContextMenu={preventCopyOut}
+              onKeyDown={blockCopyCutShortcuts}
+              placeholder={hasStoredToken ? "Stored securely in backend" : "Optional (enables pyannote diarization)"}
             />
           </label>
           <SettingsFields settings={mergeJobSettings(settings)} modelOptions={modelOptions} />
