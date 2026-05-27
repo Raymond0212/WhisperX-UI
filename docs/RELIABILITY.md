@@ -58,20 +58,14 @@ Use these repository scripts for reproducible local validation:
 - Backend tests: `./scripts/run-backend-tests.sh`
 - Runtime smoke validation: `./scripts/smoke-check-local-runtime.sh`
 - Token-enabled diarization smoke validation: `HF_TOKEN=hf_xxx ./scripts/smoke-check-local-runtime.sh`
-- Deterministic diarization fixture benchmark: `./scripts/run-diarization-benchmark.sh`
-- Real-audio benchmark data fetch/check: `./scripts/download-real-diarization-benchmark.sh` (auto-generates `benchmarks/real-audio/manifest.json` from a small public subset by default)
-- Real-audio benchmark run: `HF_TOKEN=hf_xxx ./scripts/run-real-diarization-benchmark.sh`
 
 The smoke script reports `[FAIL]` on failed prerequisites, model preparation, job completion, or transcript retrieval.
 It runs in-process with FastAPI `TestClient`, so it does not depend on binding `127.0.0.1:8000`.
 First run requires internet access for Python dependency installation and model download.
 For silent audio samples, zero transcript sentences are accepted as long as the job completes and transcript endpoint returns a valid list.
-The benchmark script computes word-level speaker accuracy and speaker-change precision/recall from deterministic local fixtures. It returns non-zero when quality metrics fall below configured thresholds (`MIN_WORD_SPEAKER_ACCURACY`, `MIN_SPEAKER_CHANGE_PRECISION`, `MIN_SPEAKER_CHANGE_RECALL`), whose defaults are `0.80`, `0.70`, and `0.70`.
-For real-audio evaluation, `download-real-diarization-benchmark.sh` now bootstraps a manifest from `diarizers-community/voxconverse` by default (configurable via `BOOTSTRAP_DATASET`, `BOOTSTRAP_SPLIT`, and `BOOTSTRAP_CASES`) and verifies referenced files exist. You can still provide a curated manifest with provenance, local audio/reference paths, and optional download URLs plus checksums. Real benchmark requires `HF_TOKEN` unless explicitly evaluating the no-token fallback path. Speaker-change gating uses a boundary-time collar (`SPEAKER_CHANGE_COLLAR_SECONDS`, default `0.75`) to avoid false failures from near-boundary timestamp jitter.
 
 The caveat-closure cycle achieved a network-enabled local runtime smoke pass with `./scripts/smoke-check-local-runtime.sh`: dependencies installed, the faster-whisper model downloaded into `app_data_smoke/models/`, the in-process job completed, and transcript retrieval returned a valid list payload.
 
-The token-enabled pyannote benchmark verification cycle achieved a pass with `HF_TOKEN` loaded from local environment and `./scripts/run-real-diarization-benchmark.sh` against the bootstrapped real-audio case. The passing run reported word speaker accuracy `0.956`, sentence speaker accuracy `0.829`, collar speaker-change precision `0.857`, and collar speaker-change recall `0.600` against the default thresholds.
 The scheduler should mark a job as `failed` when the worker exits unexpectedly. If exit signal is `SIGKILL`, the stored error should indicate likely out-of-memory termination.
 
 On API startup and during scheduler polling, stale `processing` jobs with missing/expired heartbeat should be reconciled to `failed`. If the scheduler still has a local worker handle for that job, it should terminate and unregister the unresponsive handle so queued work is not blocked behind a silent worker.
