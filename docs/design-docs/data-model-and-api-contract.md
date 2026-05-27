@@ -20,6 +20,9 @@ Represents one uploaded audio file.
 | `size_bytes` | File size. |
 | `created_at` | Upload timestamp. |
 | `deleted_at` | Soft delete timestamp. |
+| `speaker_count` | Exact speaker count hint when provided. |
+| `min_speakers` | Minimum speaker hint when provided. |
+| `max_speakers` | Maximum speaker hint when provided. |
 
 ### Transcription Job
 
@@ -41,7 +44,7 @@ Represents one processing run for an audio file.
 | `speaker_count` | Exact speaker count when provided. |
 | `min_speakers` | Minimum speakers when provided. |
 | `max_speakers` | Maximum speakers when provided. |
-| `settings_json` | Serialized job settings after secret-like keys are stripped. |
+| `settings_json` | Serialized job settings after broad secret-like keys are stripped; exact `diarization_token` and `hf_token` keys are currently preserved and should be treated as security debt. |
 | `error_message` | Failure reason. |
 | `created_at` | Creation timestamp. |
 | `queued_at` | Queue insertion timestamp. |
@@ -52,6 +55,8 @@ Represents one processing run for an audio file.
 | `last_heartbeat_at` | Last worker heartbeat timestamp. |
 | `worker_exit_code` | Worker exit code when known. |
 | `worker_signal` | Worker signal when process was terminated by signal. |
+| `runtime_device` | Device actually used by processing when known. |
+| `runtime_device_note` | Runtime device fallback or selection note when known. |
 | `progress_stage` | Current processing stage label. |
 | `progress_percent` | Approximate stage-weighted completion percent (`0..100`). |
 | `progress_message` | User-facing stage text for non-blocking UI progress display. |
@@ -113,7 +118,18 @@ Stores preferences and default model choices.
 | `value_json` | Serialized setting value. |
 | `updated_at` | Last update timestamp. |
 
-Credential persistence APIs are not part of the current phase-2 path.
+### Provider Credential
+
+Stores encrypted local provider credentials.
+
+| Field | Purpose |
+| --- | --- |
+| `id` | Unique credential record ID. |
+| `provider` | Provider key, currently `huggingface`. |
+| `display_name` | User-facing provider name. |
+| `encrypted_api_key` | Encrypted token payload; never returned as plaintext. |
+| `created_at` | Creation timestamp. |
+| `updated_at` | Last update timestamp. |
 
 ## API Contract
 
@@ -126,6 +142,7 @@ GET /api/audio/{audio_id}
 PATCH /api/audio/{audio_id}
 DELETE /api/audio/{audio_id}
 GET /api/audio/{audio_id}/stream
+GET /api/audio/{audio_id}/download
 ```
 
 Responsibilities:
@@ -136,27 +153,29 @@ Responsibilities:
 - update display title
 - soft delete audio
 - stream local audio for browser playback
+- download the uploaded audio using the original filename
 
 Current implementation notes:
 
 - Supported extensions are `.mp3`, `.wav`, `.m4a`, `.flac`, `.ogg`, and `.aac`.
 - Stored filenames use a UUID prefix plus a sanitized source filename.
 - MIME type is normalized from the filename when the supplied content type is not audio.
-- Streaming resolves the stored path and requires it to remain inside the configured uploads directory.
+- Streaming and download resolve the stored path and require it to remain inside the configured uploads directory.
 
 ### Job APIs
 
 ```http
 POST /api/jobs
 GET /api/jobs/{job_id}
+DELETE /api/jobs/{job_id}
 GET /api/audio/{audio_id}/jobs
 ```
 
 Responsibilities:
 
-- create and run a transcription job
 - create and enqueue a transcription job
 - return job status and metadata
+- soft delete a job by marking its status `deleted`
 - list jobs for an audio file
 - persist failure messages when processing fails
 
@@ -164,9 +183,15 @@ Current implementation notes:
 
 - Jobs use fixed engines: `transcription_engine: "faster-whisper"` and `diarization_engine: "huggingface-pyannote"`.
 - `POST /api/jobs` returns immediately with a queued/processing job; completion is retrieved via `GET /api/jobs/{job_id}` polling.
+- Jobs are first persisted as `queued` with `queued_at`; a local queue service starts supervised worker processes up to `max_parallel_jobs`.
+- Worker supervision persists `worker_pid`, `worker_started_at`, `last_heartbeat_at`, `worker_exit_code`, and `worker_signal` when available.
+- Worker heartbeats update `last_heartbeat_at` and may advance approximate stage progress while the worker remains alive.
+- Stale `processing` jobs with missing or expired heartbeats are reconciled to `failed`.
 - Job responses include progress metadata (`progress_stage`, `progress_percent`, `progress_message`, `progress_stage_started_at`, `progress_updated_at`) for stage-level UI feedback while polling.
 - Progress percentages are approximate, stage-weighted estimates (not exact model inference completion).
-- Request `settings` may carry transient runtime-only values such as `diarization_token` or `hf_token`; secret-like values are stripped from persisted `settings_json`.
+- `DELETE /api/jobs/{job_id}` marks the job `deleted`, sets `completed_at`, clears `error_message`, and asks the queue service to terminate an active local worker for that job.
+- `GET /api/audio/{audio_id}/jobs` omits jobs whose status is `deleted`.
+- Request `settings` may carry transient runtime-only values such as `diarization_token` or `hf_token`. Broad secret-like setting keys are stripped, but exact `diarization_token` and `hf_token` keys are currently preserved in persisted `settings_json` and can appear in job response `settings`; this is a documented security debt item, not desired long-term behavior.
 - Token-enabled pyannote diarization passes a preloaded `{waveform, sample_rate}` input to the pipeline. Audio decoding tries torchaudio's soundfile backend, then torchaudio's default loader, then falls back to `faster_whisper.audio.decode_audio`; multi-channel input is averaged to mono float32.
 - If a diarization token is present, pyannote diarization runs and its output is normalized into timestamped speaker intervals. The parser accepts the pyannote community wrapper's `exclusive_speaker_diarization`, falls back to `speaker_diarization`, then to raw `itertracks` annotations or interval dictionaries.
 - Token-enabled speaker assignment first labels faster-whisper words by strongest diarization interval overlap. Boundary ties keep the first matching diarization interval, and non-overlapping gaps fall back to the nearest interval so assignment remains deterministic.
@@ -177,19 +202,23 @@ Current implementation notes:
 
 ```http
 GET /api/models
+GET /api/model-options
 POST /api/models/prepare-basic
 ```
 
 Responsibilities:
 
 - report local Hugging Face model download status under the configured `app_data/models/` directory
+- report supported transcription/diarization model options and backend defaults
 - download the basic local transcription model when missing
-- keep Hugging Face tokens transient and out of persisted settings
+- keep Hugging Face tokens out of plaintext API responses
 
 Current implementation notes:
 
+- `GET /api/model-options` returns `transcription_models`, `diarization_models`, and `defaults`.
 - The basic profile downloads `Systran/faster-distil-whisper-large-v3` into `app_data/models/Systran--faster-distil-whisper-large-v3`.
 - Download uses `huggingface_hub.snapshot_download` with a repository-local Hugging Face cache under `app_data/models/.hf-cache`.
+- `POST /api/models/prepare-basic` accepts an optional request `hf_token`; if omitted, it uses the stored Hugging Face token when present.
 - When the local model directory exists, the faster-whisper processor uses the local directory path; otherwise it falls back to model ID.
 - The zero basic configuration path runs without token and still completes via single-speaker fallback. Supplying token enables pyannote diarization.
 
@@ -224,14 +253,23 @@ Responsibilities:
 ```http
 GET /api/settings
 PATCH /api/settings
+POST /api/secrets/hf-token
 ```
 
 Responsibilities:
 
 - read user preferences and default model settings
 - update settings as JSON-backed values
-- queue settings include `job_queue_mode` (`sequence` or `parallel`) and `max_parallel_jobs` (`1..4`, default `1`)
+- queue settings include implemented `max_parallel_jobs` (`1..4`, default `1`)
+- store a Hugging Face token through a write-only endpoint
 - avoid persisting plaintext API keys or token-like values
+
+Current implementation notes:
+
+- `GET /api/settings` returns `hf_token_stored` as a boolean and never returns `hf_token` or `diarization_token`.
+- `POST /api/secrets/hf-token` stores an encrypted token for provider `huggingface` and returns `204 No Content`.
+- There is no plaintext token read endpoint and no delete-token endpoint.
+- `job_queue_mode` is not currently read by the backend scheduler; only `max_parallel_jobs` affects worker capacity.
 
 ## Derived Views
 

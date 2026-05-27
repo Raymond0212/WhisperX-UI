@@ -8,20 +8,21 @@ WhisperX UI is a single-user local application. The default threat model is loca
 
 - The app must work without online API keys or Hugging Face tokens.
 - Local faster-whisper model files are the default transcription path.
-- Hugging Face pyannote diarization is opt-in through a transient token and should be explicit in job configuration.
+- Hugging Face pyannote diarization is opt-in through a transient request token or saved encrypted local token and should remain explicit in job configuration.
 
 ## API Keys And Tokens
 
 - API key fields must be masked in the UI.
 - API keys and tokens must not be logged.
 - API keys and tokens should not be returned in plaintext API responses.
-- MVP default is not to persist API keys.
-- If persistence is implemented, keys must be encrypted in SQLite.
+- Hugging Face token persistence is implemented through encrypted local SQLite storage.
 - Electron packaging should later prefer OS keychain storage.
 
-Current implementation strips `online_api_keys` and key names containing `api_key`, `token`, or `secret` before persisting app settings or job settings. The settings API returns `online_api_keys` as an empty object.
+Current implementation strips `online_api_keys` and most key names containing `api_key`, `token`, or `secret` before persisting app settings or job settings. Exact job setting keys named `diarization_token` or `hf_token` are currently preserved in `settings_json` and may be returned in job responses through the `settings` payload. Prefer the stored-token endpoint for normal UI flows, and treat full redaction of transient job tokens as open security debt.
 
-The basic model preparation API may receive a Hugging Face token for private or gated downloads. That token is passed only to the download call and is not returned in model status responses or persisted in app settings. Job creation may also receive a transient diarization token in request `settings`; it enables pyannote diarization for that run and is stripped from persisted job settings.
+The backend also provides `POST /api/secrets/hf-token` with request body `{"hf_token": "..."}`. This endpoint is write-only and returns `204 No Content`; there is no read endpoint that returns the plaintext token and no delete-token endpoint in the current implementation. The token is encrypted into `provider_credentials.encrypted_api_key` for provider `huggingface`, using a local key file under the app data directory. `GET /api/settings` exposes only `hf_token_stored: true|false` so the UI can show whether a saved token exists.
+
+The basic model preparation API may receive a Hugging Face token for private or gated downloads. If omitted, it uses the stored Hugging Face token when present. Job creation may also receive a transient diarization token in request `settings`; if omitted, token-enabled pyannote diarization uses the stored token when present. Stored plaintext tokens are not returned in model, job, or settings responses.
 
 ## File Handling
 
@@ -31,7 +32,7 @@ The basic model preparation API may receive a Hugging Face token for private or 
 - Audio streaming endpoints should stream known uploaded files by database ID rather than arbitrary paths.
 - Soft deletion should hide files from normal UI without immediately destroying data.
 
-Current upload handling sanitizes source filenames, prefixes stored filenames with UUIDs, validates supported audio extensions, and normalizes audio MIME types. Streaming resolves the stored path and requires it to remain under the configured uploads directory.
+Current upload handling sanitizes source filenames, prefixes stored filenames with UUIDs, validates supported audio extensions, and normalizes audio MIME types. Streaming and download endpoints resolve the stored path and require it to remain under the configured uploads directory.
 
 ## Logging
 

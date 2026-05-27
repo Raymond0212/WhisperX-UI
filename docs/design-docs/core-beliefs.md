@@ -2,7 +2,7 @@
 
 ## Local-First By Default
 
-The app should work on the user's machine without accounts, cloud sync, or online API keys. The base workflow uses local faster-whisper transcription and must complete without a Hugging Face token by falling back to a single speaker label (`SPEAKER_00`). Supplying a transient token enables Hugging Face pyannote diarization.
+The app should work on the user's machine without accounts, cloud sync, or online API keys. The base workflow uses local faster-whisper transcription and must complete without a Hugging Face token by falling back to a single speaker label (`SPEAKER_00`). Supplying a transient token, or saving an encrypted local Hugging Face token, enables Hugging Face pyannote diarization.
 
 ## Sentence Is The Canonical Transcript Unit
 

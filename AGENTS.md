@@ -16,7 +16,8 @@ The implementation target is:
 - [ARCHITECTURE.md](ARCHITECTURE.md): top-level system architecture, subsystem boundaries, and dependency direction.
 - [docs/product-specs/index.md](docs/product-specs/index.md): product behavior and MVP requirements.
 - [docs/design-docs/index.md](docs/design-docs/index.md): design decisions, rationale, and implementation constraints.
-- [docs/exec-plans/active/phase-2-refactor-fast-whisper-pyannote.md](docs/exec-plans/active/phase-2-refactor-fast-whisper-pyannote.md): active phase-2 refactor plan.
+- [docs/ORCHISTRATION.md](docs/ORCHISTRATION.md): orchestration workflow for multi-agent implementation cycles.
+- [docs/generated/db-schema.md](docs/generated/db-schema.md): code-derived SQLite schema reference.
 - [docs/FRONTEND.md](docs/FRONTEND.md): frontend conventions and interaction expectations.
 - [docs/SECURITY.md](docs/SECURITY.md): local-first security and credential handling guidance.
 - [docs/RELIABILITY.md](docs/RELIABILITY.md): job, storage, deletion, and error-handling expectations.
@@ -32,6 +33,6 @@ The implementation target is:
 - Treat transcript sentences as the canonical transcript unit; speaker-turn views are derived display groupings.
 - Prefer updating existing docs over creating overlapping documents for the same concern.
 
-## Project Initialisation
+## Project Initialization
 
-Always load envrionment variables from `.env` file before running any agent or script. This file may contain sensitive information and should not be shared. The `.env` file is included in `.gitignore` to prevent accidental commits of sensitive data.
+Always load environment variables from the `.env` file before running any agent or script. This file may contain sensitive information and should not be shared. The `.env` file is included in `.gitignore` to prevent accidental commits of sensitive data.

@@ -36,14 +36,14 @@ Display titles are user-editable and may initially derive from the original file
 
 ## Processing Model
 
-The MVP can run processing synchronously from the user's perspective after job creation. The UI only needs `processing`, `completed`, and `failed` feedback; detailed progress streaming is deferred.
+Processing is asynchronous after job creation. The API persists a `queued` job, and a local scheduler starts supervised worker processes up to the configured `max_parallel_jobs` capacity. The UI polls job status and approximate staged progress fields rather than relying on exact real-time inference progress.
 
 The local pipeline is:
 
 ```text
 transcription
 -> sentence chunking
--> optional diarization when a Hugging Face token is supplied
+-> optional diarization when a transient or saved encrypted Hugging Face token is supplied
 -> speaker assignment
 -> speaker sample selection
 -> persistence

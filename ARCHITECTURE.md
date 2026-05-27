@@ -87,10 +87,10 @@ Processor-specific code should not leak into UI components or database models ex
 
 ## Core Constraints
 
-- Local faster-whisper transcription is the default path; Hugging Face pyannote diarization is enabled by a transient token, and the no-token path falls back to `SPEAKER_00`.
+- Local faster-whisper transcription is the default path; Hugging Face pyannote diarization is enabled by a transient request token or saved encrypted Hugging Face token, and the no-token path falls back to `SPEAKER_00`.
 - The canonical transcript unit is a sentence with stable ID, timestamps, speaker ID, original text, and current text.
 - Speaker display names are user-editable, but internal diarization labels remain stable.
 - Original transcription output is preserved even when current transcript text changes.
 - Speaker-turn transcript chunks are display-only aggregations over adjacent sentence records.
-- Processing does not require real-time progress for MVP; a simple `processing` state is sufficient.
+- Processing reports queued/processing/completed/failed/deleted states plus approximate staged progress fields for polling UI; exact real-time model inference progress is not required for MVP.
 - Soft delete is the MVP deletion behavior for uploaded audio and related UI visibility.

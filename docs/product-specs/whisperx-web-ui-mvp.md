@@ -19,7 +19,7 @@ The frontend is React. The backend is Python. The app is initially a local web a
 
 - Multi-user accounts
 - Authentication
-- Real-time progress updates
+- Exact real-time model progress updates
 - Cloud sync
 - Collaborative editing
 - SaaS billing
@@ -34,7 +34,7 @@ User opens app
 -> optionally configures transcription and diarization models
 -> clicks one process button
 -> app downloads the basic local transcription model if it is missing
--> waits while processing completes
+-> waits while queued/processing status and approximate staged progress update
 -> reviews sentence-level transcript with speaker labels
 -> plays audio by clicking transcript sentences or speaker samples
 -> edits transcript text
@@ -88,7 +88,7 @@ faster-whisper transcription
 | ID     | Requirement                                                                                 |
 | ------ | ------------------------------------------------------------------------------------------- |
 | SP-001 | App supports speaker diarization.                                                           |
-| SP-002 | Hugging Face pyannote diarization is enabled when the user supplies a transient token.      |
+| SP-002 | Hugging Face pyannote diarization is enabled when the user supplies a transient token or saves an encrypted local token. |
 | SP-003 | App assigns speaker labels to transcript sentences.                                         |
 | SP-004 | Initial labels may use names such as `SPEAKER_00`.                                          |
 | SP-005 | User can rename each detected speaker.                                                      |
@@ -176,13 +176,13 @@ MVP save behavior should use save-on-blur or short debounce autosave.
 | MC-002 | User can configure diarization model before processing.                                            |
 | MC-003 | Default models are local.                                                                          |
 | MC-004 | Hugging Face pyannote diarization is optional for the zero-basic-config path.                      |
-| MC-005 | User can provide a transient Hugging Face token for model download or pyannote diarization.        |
+| MC-005 | User can provide a transient or saved encrypted Hugging Face token for model download or pyannote diarization. |
 | MC-006 | Model settings used for a job are persisted.                                                       |
 | MC-007 | Different uploads or jobs may use different model settings.                                        |
 | MC-008 | The basic local transcription model can be downloaded automatically before first local processing. |
 
 Transcription settings include `transcription_engine`, `transcription_model`, language, device, compute type, and batch size. Diarization settings include `diarization_engine`, `diarization_model`, speaker count, min speakers, max speakers, and a runtime-only token when pyannote diarization is enabled.
-Queue settings include `job_queue_mode` (`sequence` default, `parallel` optional) and `max_parallel_jobs` (`1..4`) to limit local resource pressure.
+Implemented queue capacity is controlled by `max_parallel_jobs` (`1..4`) to limit local resource pressure. `job_queue_mode` is planned/deferred and is not currently read by the backend scheduler.
 
 ### API Keys
 
@@ -193,10 +193,10 @@ Queue settings include `job_queue_mode` (`sequence` default, `parallel` optional
 | AK-003 | App works without tokens by using local faster-whisper transcription and single-speaker fallback. |
 | AK-004 | API keys are masked in the UI.                                                                    |
 | AK-005 | API keys are not logged.                                                                          |
-| AK-006 | User can remove saved API keys.                                                                   |
-| AK-007 | Persisted API keys are stored securely.                                                           |
+| AK-006 | Planned/deferred: user can remove saved API keys.                                                 |
+| AK-007 | Persisted Hugging Face tokens are stored encrypted locally.                                       |
 
-MVP default: do not persist API keys unless encrypted storage is deliberately implemented.
+Current implementation: `POST /api/secrets/hf-token` stores a Hugging Face token encrypted in local SQLite and no API returns the stored plaintext token. `GET /api/settings` exposes only `hf_token_stored`. Transient token fields sent inside job settings are currently preserved in job settings and may be echoed in job responses; this is a security debt item. AK-006 is planned/deferred; there is no delete-token endpoint yet.
 
 ### Persistence
 
@@ -219,6 +219,7 @@ Suggested MVP statuses:
 
 ```text
 uploaded
+queued
 processing
 completed
 failed
@@ -227,11 +228,14 @@ deleted
 
 | ID     | Requirement                                   |
 | ------ | --------------------------------------------- |
-| JS-001 | A job starts when the user clicks process.    |
+| JS-001 | A job is queued when the user clicks process. |
 | JS-002 | A job stores its current status.              |
 | JS-003 | Successful jobs save transcript and speakers. |
 | JS-004 | Failed jobs save error details.               |
 | JS-005 | User can view failed job status.              |
+| JS-006 | User can see approximate staged progress while polling a job. |
+
+Progress is approximate and stage-weighted through fields such as `progress_stage`, `progress_percent`, and `progress_message`. It must not be presented as exact real-time model inference progress.
 
 ### VTT Export
 
@@ -264,6 +268,8 @@ Alice: I think we should review the timeline again.
 
 MVP policy: use soft delete by setting `deleted_at`.
 
+Current implementation also supports deleting a specific job by marking its status `deleted`; per-audio job listings hide deleted jobs.
+
 ### Duplicate Filenames
 
 | ID     | Requirement                                                    |
@@ -285,7 +291,7 @@ Recommended stored filename format:
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Library           | Show uploaded audio files, editable titles, upload date, duration, job status, delete action, and open action.                      |
 | Upload            | Support file select or drag-and-drop, title editing, model configuration, and one-click process.                                    |
-| Processing        | Show simple processing state, final result, or failure error.                                                                       |
+| Processing        | Show queued/processing state with approximate staged progress, final result, or failure error.                                      |
 | Transcript Review | Show audio player, speaker labeling, speaker samples, sentence view, speaker-turn view, sentence playback, editing, and VTT export. |
 | Settings          | Configure default transcription model, diarization model, runtime defaults, local model paths, and storage location if supported.   |
 
@@ -298,8 +304,8 @@ Recommended stored filename format:
 - Backend: Python.
 - Database: SQLite.
 - Default processing: faster-whisper with downloaded local model files.
-- Hugging Face pyannote diarization: optional through a transient token.
-- Progress UI: simple processing state.
+- Hugging Face pyannote diarization: optional through a transient token or saved encrypted token.
+- Progress UI: approximate staged progress from polled job fields.
 - Audio retention: retained by default.
 - Duplicate uploads: allowed and auto-renamed.
 - Transcript unit: sentence.
@@ -310,4 +316,4 @@ Recommended stored filename format:
 
 ## Post-MVP
 
-Deferred features include manual speaker reassignment, transcript version history, word-level editing, waveform display, real-time progress, job cancellation, batch uploads, extra exports, advanced model management, OS keychain integration, permanent deletion, advanced diarization correction, transcript search, and tagging.
+Deferred features include manual speaker reassignment, transcript version history, word-level editing, waveform display, exact real-time model progress, job cancellation beyond delete/worker termination, batch uploads, extra exports, advanced model management, OS keychain integration, delete-token UI/API, permanent deletion, advanced diarization correction, transcript search, and tagging.

@@ -13,15 +13,17 @@ failed
 deleted
 ```
 
-On success, the app should persist speakers, transcript sentences, job settings, and completion time. On failure, it should persist `failed`, an error message, and enough metadata for the user to understand which audio and settings were involved.
+On success, the app should persist speakers, transcript sentences, job settings, and completion time. On failure, it should persist `failed`, an error message, and enough metadata for the user to understand which audio and settings were involved. Deleting a job marks it `deleted`; normal per-audio job listings omit deleted jobs.
 
-The backend enqueues jobs first, then a local scheduler starts supervised model workers. Worker metadata and heartbeat fields are persisted on the job row so the API can report what happened after crashes or OOM kills.
+The backend enqueues jobs first by creating `queued` job rows with `queued_at`, then a local scheduler starts supervised model workers up to configured capacity. Worker metadata (`worker_pid`, `worker_started_at`, `worker_exit_code`, `worker_signal`) and heartbeat fields (`last_heartbeat_at`) are persisted on the job row so the API can report what happened after crashes or OOM kills.
+
+`max_parallel_jobs` is the implemented queue capacity setting. The scheduler reads it from app settings, coerces it to an integer, and clamps it to `1..4`. `job_queue_mode` may appear in frontend defaults or older docs, but it is not read by the backend scheduler and should not be documented as implemented queue behavior.
 
 ## Processing Expectations
 
-The API now reports approximate stage-weighted progress while a job is `queued` or `processing`.
+The API reports approximate stage-weighted progress while a job is `queued` or `processing`.
 Progress data is persisted on each job row as `progress_stage`, `progress_percent`, `progress_message`, `progress_stage_started_at`, and `progress_updated_at`.
-Percentages are intentionally approximate and bounded by stage ranges; they are not exact inference completion metrics.
+Percentages are intentionally approximate and bounded by stage ranges; they are not exact real-time model inference completion metrics. Heartbeat updates may advance the displayed percentage within the current stage so polling UI remains active, but stage changes come from the processing pipeline.
 
 Processing should avoid partial success states that look completed. If transcript or speaker persistence fails, the job should be treated as failed unless the implementation has an explicit recovery path.
 
@@ -37,7 +39,7 @@ Uploaded audio is retained by default. Deletion should use soft delete for MVP b
 
 Current soft delete also marks related transcription jobs as `deleted`. Audio bytes are retained on disk.
 
-Permanent deletion is deferred and should later be explicit because it removes user data from disk and SQLite.
+Permanent deletion is deferred and should later be explicit because it removes user data from disk and SQLite. A separate delete-token endpoint is also not implemented.
 
 ## Playback And Export
 

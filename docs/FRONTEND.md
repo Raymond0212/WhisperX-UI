@@ -28,7 +28,7 @@ Current implementation covers the core upload/library/workspace/settings flow wi
 - Use `transcription_engine: "faster-whisper"` and `diarization_engine: "huggingface-pyannote"` as fixed defaults.
 - The zero basic configuration path should complete without a token by falling back to single-speaker assignment (`SPEAKER_00`).
 - Before processing, call the backend basic model preparation endpoint so the required Hugging Face model is downloaded into local app storage if missing.
-- Treat Diarization/HF token input as transient per-job data. Send it only in job request `settings`; do not persist it as a saved default.
+- Treat per-job Diarization/HF token input as runtime-only request data. Saved Hugging Face tokens must go through the backend secret endpoint and should be represented in UI only by masked state such as `hf_token_stored`.
 - Use save-on-blur or short debounce autosave for transcript sentence edits.
 - Show failed job status and error messages in the UI.
 - While polling `GET /api/jobs/{job_id}`, render progress from `progress_stage`, `progress_percent`, and `progress_message` in a non-blocking way that blends into the workspace (no modal/overlay).
@@ -43,9 +43,9 @@ Current implementation covers the core upload/library/workspace/settings flow wi
 
 ## Frontend Tests
 
-`frontend/package.json` defines `npm test`, which runs Node.js utility tests for extracted helpers in `frontend/src/jobUtils.js` and a mounted Vitest/JSDOM workflow test for the MVP upload, process, review, edit, export, failed-job, and delete flow.
+`frontend/package.json` defines `npm test`, which runs Node.js utility tests for extracted helpers in `frontend/src/jobUtils.js` and mounted Vitest/JSDOM workflow tests for the MVP upload, process, review, edit, export, failed-job, delete, and stored-token flows.
 
 Current frontend coverage includes:
 
-- 9 Node utility tests for time formatting, speaker-turn grouping, settings merge/normalization, basic model preparation request construction, transient token request construction, local speaker/sentence updates, and range playback.
-- 1 mounted React workflow test using Vitest, JSDOM, and Testing Library.
+- 10 Node utility tests for time formatting, speaker-turn grouping, settings merge/normalization, basic model preparation request construction, transient token request construction, local speaker/sentence updates, and range playback.
+- 2 mounted React workflow tests using Vitest, JSDOM, and Testing Library.

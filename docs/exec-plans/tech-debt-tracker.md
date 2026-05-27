@@ -4,7 +4,7 @@ This file tracks known deferred work and maintenance liabilities. Items should s
 
 | Item | Status | Notes |
 | --- | --- | --- |
-| Real-time progress | Deferred | MVP only needs a simple processing state. |
+| Exact real-time model progress | Deferred | Current implementation has queued jobs and approximate staged progress for polling UI; exact inference progress remains deferred. |
 | Job cancellation | Deferred | Add after processing orchestration is stable. |
 | Permanent deletion | Deferred | MVP uses soft delete to avoid accidental data loss. |
 | Manual speaker reassignment | Deferred | Speaker renaming is MVP; sentence-level reassignment comes later. |
@@ -15,4 +15,5 @@ This file tracks known deferred work and maintenance liabilities. Items should s
 | Batch uploads | Deferred | Single-file upload first. |
 | Extra export formats | Deferred | VTT export first; TXT, JSON, SRT, CSV, DOCX later. |
 | OS keychain integration | Deferred | Relevant when Electron packaging begins. |
+| Transient job token redaction | Open | Exact `diarization_token` and `hf_token` job setting keys are currently preserved in `settings_json` and may be returned in job responses; stored-token UI flows avoid sending them. |
 | Real faster-whisper and pyannote runtime verification | Partially closed | Local smoke validation and token-enabled real-audio benchmark verification have passed on the default path; broader coverage across datasets, platforms, hardware, and gated model-access states remains deferred. |
