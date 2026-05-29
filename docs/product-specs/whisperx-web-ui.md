@@ -1,4 +1,4 @@
-# WhisperX Web UI MVP Product Specification
+# WhisperX Web UI Product Specification
 
 ## Product Summary
 
@@ -42,7 +42,7 @@ User opens app
 -> exports VTT or keeps results locally
 ```
 
-## MVP Functional Requirements
+## Functional Requirements
 
 ### Audio Upload
 
@@ -85,19 +85,19 @@ faster-whisper transcription
 
 ### Diarization And Speakers
 
-| ID     | Requirement                                                                                 |
-| ------ | ------------------------------------------------------------------------------------------- |
-| SP-001 | App supports speaker diarization.                                                           |
+| ID     | Requirement                                                                                                              |
+| ------ | ------------------------------------------------------------------------------------------------------------------------ |
+| SP-001 | App supports speaker diarization.                                                                                        |
 | SP-002 | Hugging Face pyannote diarization is enabled when the user supplies a transient token or saves an encrypted local token. |
-| SP-003 | App assigns speaker labels to transcript sentences.                                         |
-| SP-004 | Initial labels may use names such as `SPEAKER_00`.                                          |
-| SP-005 | User can rename each detected speaker.                                                      |
-| SP-006 | Renaming a speaker updates all displayed transcript sentences for that speaker.             |
-| SP-007 | Internal speaker IDs remain stable after display names change.                              |
-| SP-008 | App provides a speaker sample section after diarization.                                    |
-| SP-009 | User can play a sample audio clip for each detected speaker.                                |
-| SP-010 | Speaker samples help users identify and rename speakers quickly.                            |
-| SP-011 | If no Hugging Face token is supplied, processing still completes by assigning `SPEAKER_00`. |
+| SP-003 | App assigns speaker labels to transcript sentences.                                                                      |
+| SP-004 | Initial labels may use names such as `SPEAKER_00`.                                                                       |
+| SP-005 | User can rename each detected speaker.                                                                                   |
+| SP-006 | Renaming a speaker updates all displayed transcript sentences for that speaker.                                          |
+| SP-007 | Internal speaker IDs remain stable after display names change.                                                           |
+| SP-008 | App provides a speaker sample section after diarization.                                                                 |
+| SP-009 | User can play a sample audio clip for each detected speaker.                                                             |
+| SP-010 | Speaker samples help users identify and rename speakers quickly.                                                         |
+| SP-011 | If no Hugging Face token is supplied, processing still completes by assigning `SPEAKER_00`.                              |
 
 Speaker identity uses stable internal keys and editable display names:
 
@@ -116,7 +116,7 @@ display_name: Alice
 | SS-004 | Speaker label edits update the transcript globally.            |
 | SS-005 | Samples are short and useful for speaker identification.       |
 
-Prefer 5 to 15 second samples. Store sample start and end timestamps unless separate clips are needed later.
+Prefer 5 to 15 second samples when possible. Store sample start and end timestamps unless separate clips are needed later. When selecting from sentence ranges, choose the longest available sentence for each speaker.
 
 ### Transcript Views
 
@@ -166,20 +166,20 @@ Speaker-turn view is derived from adjacent sentences.
 | ED-005 | Transcript edits do not modify timestamps.                                            |
 | ED-006 | Transcript edits do not modify speaker assignments unless explicitly supported later. |
 
-MVP save behavior should use save-on-blur or short debounce autosave.
+save behavior should use save-on-blur or short debounce autosave.
 
 ### Model Configuration
 
-| ID     | Requirement                                                                                        |
-| ------ | -------------------------------------------------------------------------------------------------- |
-| MC-001 | User can configure transcription model before processing.                                          |
-| MC-002 | User can configure diarization model before processing.                                            |
-| MC-003 | Default models are local.                                                                          |
-| MC-004 | Hugging Face pyannote diarization is optional for the zero-basic-config path.                      |
+| ID     | Requirement                                                                                                    |
+| ------ | -------------------------------------------------------------------------------------------------------------- |
+| MC-001 | User can configure transcription model before processing.                                                      |
+| MC-002 | User can configure diarization model before processing.                                                        |
+| MC-003 | Default models are local.                                                                                      |
+| MC-004 | Hugging Face pyannote diarization is optional for the zero-basic-config path.                                  |
 | MC-005 | User can provide a transient or saved encrypted Hugging Face token for model download or pyannote diarization. |
-| MC-006 | Model settings used for a job are persisted.                                                       |
-| MC-007 | Different uploads or jobs may use different model settings.                                        |
-| MC-008 | The basic local transcription model can be downloaded automatically before first local processing. |
+| MC-006 | Model settings used for a job are persisted.                                                                   |
+| MC-007 | Different uploads or jobs may use different model settings.                                                    |
+| MC-008 | The basic local transcription model can be downloaded automatically before first local processing.             |
 
 Transcription settings include `transcription_engine`, `transcription_model`, language, device, compute type, and batch size. Diarization settings include `diarization_engine`, `diarization_model`, speaker count, min speakers, max speakers, and a runtime-only token when pyannote diarization is enabled.
 Implemented queue capacity is controlled by `max_parallel_jobs` (`1..4`) to limit local resource pressure. `job_queue_mode` is planned/deferred and is not currently read by the backend scheduler.
@@ -215,7 +215,7 @@ app_data/
 
 ### Job Status
 
-Suggested MVP statuses:
+Suggested statuses:
 
 ```text
 uploaded
@@ -226,28 +226,31 @@ failed
 deleted
 ```
 
-| ID     | Requirement                                   |
-| ------ | --------------------------------------------- |
-| JS-001 | A job is queued when the user clicks process. |
-| JS-002 | A job stores its current status.              |
-| JS-003 | Successful jobs save transcript and speakers. |
-| JS-004 | Failed jobs save error details.               |
-| JS-005 | User can view failed job status.              |
+| ID     | Requirement                                                   |
+| ------ | ------------------------------------------------------------- |
+| JS-001 | A job is queued when the user clicks process.                 |
+| JS-002 | A job stores its current status.                              |
+| JS-003 | Successful jobs save transcript and speakers.                 |
+| JS-004 | Failed jobs save error details.                               |
+| JS-005 | User can view failed job status.                              |
 | JS-006 | User can see approximate staged progress while polling a job. |
+| JS-007 | While the selected job is queued or processing, the primary process action becomes Stop. |
+| JS-008 | Stopping a job deletes only that job and terminates only its active worker, if one exists. |
+| JS-009 | Queue capacity for a stopped processing job is released only after that worker has fully exited. |
 
 Progress is approximate and stage-weighted through fields such as `progress_stage`, `progress_percent`, and `progress_message`. It must not be presented as exact real-time model inference progress.
 
 ### VTT Export
 
-| ID      | Requirement                                              |
-| ------- | -------------------------------------------------------- |
-| VTT-001 | Transcript is sentence-chunked in VTT-compatible format. |
-| VTT-002 | Sentence VTT export uses one cue per sentence.           |
-| VTT-003 | Speaker-turn VTT export groups adjacent sentences with the same speaker into one cue. |
-| VTT-004 | Each cue includes start and end timestamps.              |
-| VTT-005 | Each cue uses current edited transcript text.            |
-| VTT-006 | Each cue uses current speaker display name.              |
-| VTT-007 | User can export transcript as `.vtt`.                    |
+| ID      | Requirement                                                                               |
+| ------- | ----------------------------------------------------------------------------------------- |
+| VTT-001 | Transcript is sentence-chunked in VTT-compatible format.                                  |
+| VTT-002 | Sentence VTT export uses one cue per sentence.                                            |
+| VTT-003 | Speaker-turn VTT export groups adjacent sentences with the same speaker into one cue.     |
+| VTT-004 | Each cue includes start and end timestamps.                                               |
+| VTT-005 | Each cue uses current edited transcript text.                                             |
+| VTT-006 | Each cue uses current speaker display name.                                               |
+| VTT-007 | User can export transcript as `.vtt`.                                                     |
 | VTT-008 | Export action asks the user to confirm the sentence-based or speaker-turn-based download. |
 
 Example:
@@ -268,9 +271,9 @@ Alice: I think we should review the timeline again.
 | DL-003 | Related jobs and transcripts are deleted or hidden.       |
 | DL-004 | Deletion avoids accidental data loss where possible.      |
 
-MVP policy: use soft delete by setting `deleted_at`.
+Deletion policy: the frontend prompts before deleting audio. The backend soft-deletes immediately by setting `deleted_at`, hides the audio from normal library views, marks related jobs `deleted`, terminates active workers for those jobs, and permanently removes related database rows, uploaded audio bytes, and per-job log files after 30 days via startup cleanup and a daily local-midnight purge.
 
-Current implementation also supports deleting a specific job by marking its status `deleted`; per-audio job listings hide deleted jobs.
+Current implementation also supports deleting a specific job by marking its status `deleted`; per-audio job listings hide deleted jobs. Deleting a queued or processing job from the Stop action targets only that job's worker. Other queued work must wait until the terminated worker has exited before the scheduler starts another job in that capacity slot.
 
 ### Duplicate Filenames
 
@@ -315,7 +318,3 @@ Recommended stored filename format:
 - Speaker labels: globally editable display names.
 - Playback: timestamped sentence and speaker sample playback.
 - Packaging target: Electron later.
-
-## Post-MVP
-
-Deferred features include manual speaker reassignment, transcript version history, word-level editing, waveform display, exact real-time model progress, job cancellation beyond delete/worker termination, batch uploads, extra exports, advanced model management, OS keychain integration, delete-token UI/API, permanent deletion, advanced diarization correction, transcript search, and tagging.

@@ -53,6 +53,7 @@ export function App() {
   const playbackControllerRef = useRef(null);
   const toastIdRef = useRef(0);
   const toastTimersRef = useRef(new Map());
+  const stoppedJobIdsRef = useRef(new Set());
 
   useEffect(() => {
     notify("Ready");
@@ -306,6 +307,25 @@ export function App() {
     await refreshLibrary();
   }
 
+  async function stopJob(job) {
+    if (!job || (job.status !== "queued" && job.status !== "processing")) return;
+    stoppedJobIdsRef.current.add(job.id);
+    await api(`/api/jobs/${job.id}`, { method: "DELETE" });
+    notify("Stopping job...");
+    if (!selectedAudio) return;
+    const nextJobs = await api(`/api/audio/${selectedAudio.id}/jobs`);
+    setJobs(nextJobs);
+    const completed = nextJobs.find((item) => item.status === "completed");
+    if (completed) {
+      await openJob(completed);
+    } else if (selectedJob?.id === job.id) {
+      setSelectedJob(null);
+      setSpeakers([]);
+      setSentences([]);
+    }
+    await refreshLibrary();
+  }
+
   async function deleteAudio(audio) {
     await api(`/api/audio/${audio.id}`, { method: "DELETE" });
     setSelectedAudio(null);
@@ -367,11 +387,27 @@ export function App() {
     let resolvedJob = job;
     const startedAt = Date.now();
     while (resolvedJob.status === "queued" || resolvedJob.status === "processing") {
+      if (stoppedJobIdsRef.current.has(resolvedJob.id)) {
+        resolvedJob = { ...resolvedJob, status: "deleted" };
+        break;
+      }
       if (Date.now() - startedAt > 30 * 60 * 1000) {
         break;
       }
       await new Promise((resolve) => window.setTimeout(resolve, 250));
-      resolvedJob = await api(`/api/jobs/${resolvedJob.id}`);
+      if (stoppedJobIdsRef.current.has(resolvedJob.id)) {
+        resolvedJob = { ...resolvedJob, status: "deleted" };
+        break;
+      }
+      try {
+        resolvedJob = await api(`/api/jobs/${resolvedJob.id}`);
+      } catch (error) {
+        if (!stoppedJobIdsRef.current.has(resolvedJob.id)) {
+          throw error;
+        }
+        resolvedJob = { ...resolvedJob, status: "deleted" };
+        break;
+      }
       if (selectedAudioRef.current?.id === audioOverride.id) {
         setSelectedJob(resolvedJob);
       }
@@ -382,7 +418,15 @@ export function App() {
       );
     }
     setJobs(await api(`/api/audio/${audioOverride.id}/jobs`));
-    if (selectedAudioRef.current?.id === audioOverride.id && resolvedJob.status === "completed") {
+    const wasStopped = stoppedJobIdsRef.current.has(resolvedJob.id) || resolvedJob.status === "deleted";
+    if (wasStopped) {
+      stoppedJobIdsRef.current.delete(resolvedJob.id);
+      if (selectedAudioRef.current?.id === audioOverride.id) {
+        setSelectedJob(null);
+        setSpeakers([]);
+        setSentences([]);
+      }
+    } else if (selectedAudioRef.current?.id === audioOverride.id && resolvedJob.status === "completed") {
       await openJob(resolvedJob);
     } else if (selectedAudioRef.current?.id === audioOverride.id) {
       setSelectedJob(resolvedJob);
@@ -392,7 +436,11 @@ export function App() {
     await refreshLibrary();
     updateToast(
       processToastId,
-      resolvedJob.status === "completed" ? "Processing complete." : resolvedJob.error_message || resolvedJob.status,
+      wasStopped
+        ? "Processing stopped."
+        : resolvedJob.status === "completed"
+          ? "Processing complete."
+          : resolvedJob.error_message || resolvedJob.status,
     );
   }
 
@@ -502,6 +550,7 @@ export function App() {
           onDeleteTranscript={deleteTranscript}
           onPlay={playRange}
           onProcessAudio={processSelectedAudio}
+          onStopJob={stopJob}
           onUpdateRecordingSettings={updateRecordingSettings}
           onRenameSpeaker={renameSpeaker}
           onUpdateSentence={updateSentence}

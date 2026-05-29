@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "whisperx-ui"
 version = "0.1.0"
-description = "Local-first WhisperX UI MVP scaffold"
+description = "Local-first WhisperX UI scaffold"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [

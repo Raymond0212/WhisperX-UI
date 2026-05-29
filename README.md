@@ -2,9 +2,9 @@
 
 Local-first app for uploading audio, downloading faster-whisper models, running local transcription + Hugging Face pyannote diarization, editing sentence-level transcripts, renaming speakers, and exporting VTT.
 
-The backend supports upload, library listing, metadata fetch, title editing, soft deletion, browser audio streaming, model preparation, job creation, transcript sentence edits, speaker renaming, settings, model options, and VTT export. Transcription uses `faster-whisper` and diarization uses `pyannote/speaker-diarization-community-1`.
+The backend supports upload, library listing, metadata fetch, title editing, soft deletion with 30-day purge, browser audio streaming, model preparation, job creation, transcript sentence edits, speaker renaming, settings, model options, and VTT export. Transcription uses `faster-whisper` and diarization uses `pyannote/speaker-diarization-community-1`.
 
-The default one-click path is zero basic configuration: upload audio and click Process. The frontend asks the backend to download `distil-large-v3` (`Systran/faster-distil-whisper-large-v3`) from Hugging Face into `app_data/models/` if missing, then runs transcription with fixed phase-2 engines. If no Hugging Face token is provided, the job still completes with a single-speaker fallback (`SPEAKER_00`). Supplying a token enables pyannote diarization speaker assignment.
+The default one-click path is zero basic configuration: upload audio and click Process. The frontend asks the backend to download `distil-large-v3` (`Systran/faster-distil-whisper-large-v3`) from Hugging Face into `app_data/models/` if missing, then runs transcription with the configured local engines. If no Hugging Face token is provided, the job still completes with a single-speaker fallback (`SPEAKER_00`). Supplying a token enables pyannote diarization speaker assignment.
 
 ## One-click run
 

@@ -302,6 +302,7 @@ function SpeakerTurnList({ speakerTurns, speakers, onPlay, onRenameSpeaker, onUp
                     sentence={sentence}
                     isEditing={editingSentenceId === sentence.id}
                     onEdit={() => setEditingSentenceId(sentence.id)}
+                    onPlay={onPlay}
                     onCancel={() => setEditingSentenceId(null)}
                     onUpdateSentence={onUpdateSentence}
                   />
@@ -315,8 +316,9 @@ function SpeakerTurnList({ speakerTurns, speakers, onPlay, onRenameSpeaker, onUp
   );
 }
 
-function EditableTurnSentence({ sentence, isEditing, onEdit, onCancel, onUpdateSentence }) {
+function EditableTurnSentence({ sentence, isEditing, onEdit, onPlay, onCancel, onUpdateSentence }) {
   const editorRef = useRef(null);
+  const playsOnClick = typeof onPlay === "function";
 
   useEffect(() => {
     if (!isEditing) return;
@@ -358,11 +360,26 @@ function EditableTurnSentence({ sentence, isEditing, onEdit, onCancel, onUpdateS
       className="turn-sentence"
       role="button"
       tabIndex={0}
-      aria-label={`Edit sentence ${sentence.sentence_index ?? sentence.id}`}
+      aria-label={`${playsOnClick ? "Play" : "Edit"} sentence ${sentence.sentence_index ?? sentence.id}`}
       title={`${formatTime(sentence.start_time)}-${formatTime(sentence.end_time)}`}
-      onClick={onEdit}
+      onClick={() => {
+        if (playsOnClick) {
+          onPlay(sentence.start_time, sentence.end_time);
+          return;
+        }
+        onEdit();
+      }}
+      onDoubleClick={onEdit}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          if (playsOnClick) {
+            onPlay(sentence.start_time, sentence.end_time);
+            return;
+          }
+          onEdit();
+        }
+        if (event.key === "F2") {
           event.preventDefault();
           onEdit();
         }

@@ -43,7 +43,7 @@ def main() -> int:
     connection = connect(database_path)
     try:
         with transaction(connection):
-            connection.execute(
+            result = connection.execute(
                 """
                 UPDATE transcription_jobs
                 SET status = 'processing',
@@ -57,6 +57,8 @@ def main() -> int:
                 """,
                 (utc_now(), os.getpid(), utc_now(), utc_now(), args.job_id),
             )
+            if result.rowcount == 0:
+                return 0
         JobProgressReporter(connection).set_stage(args.job_id, "starting")
     finally:
         connection.close()

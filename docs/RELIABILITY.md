@@ -2,7 +2,7 @@
 
 ## Job State
 
-Processing jobs should persist their status so the UI can display meaningful outcomes. MVP statuses are:
+Processing jobs should persist their status so the UI can display meaningful outcomes. Statuses are:
 
 ```text
 uploaded
@@ -18,6 +18,8 @@ On success, the app should persist speakers, transcript sentences, job settings,
 The backend enqueues jobs first by creating `queued` job rows with `queued_at`, then a local scheduler starts supervised model workers up to configured capacity. Worker metadata (`worker_pid`, `worker_started_at`, `worker_exit_code`, `worker_signal`) and heartbeat fields (`last_heartbeat_at`) are persisted on the job row so the API can report what happened after crashes or OOM kills.
 
 `max_parallel_jobs` is the implemented queue capacity setting. The scheduler reads it from app settings, coerces it to an integer, and clamps it to `1..4`. `job_queue_mode` may appear in frontend defaults or older docs, but it is not read by the backend scheduler and should not be documented as implemented queue behavior.
+
+Deleting a queued or processing job is targeted. The API marks only that job `deleted` and asks the scheduler to terminate only that job's active worker handle. The scheduler must not start another queued job in that worker slot until the terminated worker has fully exited and been reaped.
 
 ## Processing Expectations
 
@@ -35,11 +37,11 @@ The basic model preparation path downloads `Systran/faster-distil-whisper-large-
 
 ## Data Retention
 
-Uploaded audio is retained by default. Deletion should use soft delete for MVP by setting `deleted_at` and hiding the item from normal library views.
+Uploaded audio is retained by default. Deletion first marks an audio item with `deleted_at`, hides it from normal library views, marks related transcription jobs as `deleted`, and terminates active local workers for those jobs.
 
-Current soft delete also marks related transcription jobs as `deleted`. Audio bytes are retained on disk.
+Deleted audio bytes remain on disk during the retention window so accidental deletion is recoverable from local storage.
 
-Permanent deletion is deferred and should later be explicit because it removes user data from disk and SQLite. A separate delete-token endpoint is also not implemented.
+On backend startup and daily at local midnight, deleted audio older than 30 days is permanently purged from SQLite, the uploads directory, and related per-job log files. A separate delete-token endpoint is not implemented.
 
 ## Playback And Export
 

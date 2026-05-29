@@ -186,3 +186,77 @@ def test_stale_active_worker_is_terminated_and_unregistered(tmp_path):
     assert "heartbeat" in row["error_message"].lower()
     assert worker.terminated is True
     assert "job-3" not in queue._workers
+
+
+def test_targeted_termination_holds_capacity_until_worker_exits(tmp_path):
+    config, connection = _setup(tmp_path)
+    now = datetime.now(UTC).isoformat()
+    for job_id, status in (("job-active", "processing"), ("job-next", "queued")):
+        connection.execute(
+            """
+            INSERT INTO transcription_jobs (
+                id, audio_file_id, status, transcription_engine, transcription_model, diarization_engine,
+                diarization_model, language, device, compute_type, batch_size, speaker_count, min_speakers,
+                max_speakers, settings_json, error_message, created_at, queued_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+            """,
+            (
+                job_id,
+                "audio-1",
+                status,
+                "faster-whisper",
+                "distil-large-v3",
+                "huggingface-pyannote",
+                "pyannote/speaker-diarization-community-1",
+                None,
+                "auto",
+                "int8",
+                8,
+                None,
+                None,
+                None,
+                "{}",
+                now,
+                now,
+            ),
+        )
+    connection.commit()
+    connection.close()
+
+    class Worker:
+        pid = 12345
+
+        def __init__(self):
+            self.terminated = False
+            self.return_code = None
+
+        def poll(self):
+            return self.return_code
+
+        def terminate(self):
+            self.terminated = True
+
+    class RecordingQueue(JobQueueService):
+        def __init__(self, config):
+            super().__init__(config)
+            self.spawned_job_ids = []
+
+        def _spawn_worker(self, job_id: str) -> None:
+            self.spawned_job_ids.append(job_id)
+
+    worker = Worker()
+    queue = RecordingQueue(config)
+    queue._workers["job-active"] = worker
+
+    queue.terminate_job("job-active")
+    queue._start_workers_if_capacity()
+
+    assert worker.terminated is True
+    assert queue.spawned_job_ids == []
+
+    worker.return_code = -15
+    queue._poll_workers()
+    queue._start_workers_if_capacity()
+
+    assert "job-active" not in queue._workers
+    assert queue.spawned_job_ids == ["job-next"]

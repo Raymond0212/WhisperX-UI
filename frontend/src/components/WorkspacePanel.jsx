@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronDown, Download, Pause, Play, RotateCcw, Volume2, Trash2 } from "lucide-react";
+import { ChevronDown, Download, Pause, Play, RotateCcw, Square, Volume2, Trash2 } from "lucide-react";
 import { API_BASE } from "../api.js";
 import { TranscriptReview } from "./TranscriptReview.jsx";
 
@@ -9,6 +9,7 @@ export function WorkspacePanel({
   onDeleteTranscript,
   onPlay,
   onProcessAudio,
+  onStopJob,
   onRenameSpeaker,
   onUpdateRecordingSettings,
   onUpdateSentence,
@@ -35,6 +36,15 @@ export function WorkspacePanel({
   React.useEffect(() => {
     setIsEditingTitle(false);
   }, [selectedAudio?.id]);
+
+  const isActiveJob = selectedJob?.status === "queued" || selectedJob?.status === "processing";
+  const hasCompletedLatestJob = selectedAudio?.latest_job_status === "completed";
+  const processButtonLabel = isActiveJob
+    ? "Stop"
+    : hasCompletedLatestJob
+      ? "Reprocess"
+      : "Process";
+  const ProcessButtonIcon = isActiveJob ? Square : hasCompletedLatestJob ? RotateCcw : Play;
 
   return (
     <section className="workspace">
@@ -70,14 +80,18 @@ export function WorkspacePanel({
             <div className="toolbar">
               <button
                 type="button"
-                className={selectedAudio.latest_job_status === "completed" ? "process-button process-button--reprocess" : "process-button"}
-                onClick={() => onProcessAudio()}
-                aria-label={selectedAudio.latest_job_status === "completed" ? "Reprocess" : "Process"}
+                className={hasCompletedLatestJob && !isActiveJob ? "process-button process-button--reprocess" : "process-button"}
+                onClick={() => {
+                  if (isActiveJob) {
+                    onStopJob(selectedJob);
+                    return;
+                  }
+                  onProcessAudio();
+                }}
+                aria-label={processButtonLabel}
               >
-                {selectedAudio.latest_job_status === "completed" ? <RotateCcw size={16} /> : <Play size={16} />}
-                <span className="toolbar-label">
-                  {selectedAudio.latest_job_status === "completed" ? "Reprocess" : "Process"}
-                </span>
+                <ProcessButtonIcon size={16} />
+                <span className="toolbar-label">{processButtonLabel}</span>
               </button>
               <button
                 type="button"

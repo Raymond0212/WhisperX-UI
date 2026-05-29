@@ -12,7 +12,7 @@ import sqlite3
 import uuid
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -38,6 +38,8 @@ from .processors.speaker_assignment import assign_speakers
 from .schemas import JobCreate, ModelPrepareRequest
 
 logger = logging.getLogger(__name__)
+
+DELETED_AUDIO_RETENTION_DAYS = 30
 
 PROGRESS_STAGE_RANGES: dict[str, tuple[float, float]] = {
     "queued": (0.0, 2.0),
@@ -554,7 +556,7 @@ class AudioService:
                 raise HTTPException(status_code=404, detail="Audio file not found")
         return self.get_audio(audio_id)
 
-    def soft_delete(self, audio_id: str) -> None:
+    def soft_delete(self, audio_id: str) -> list[str]:
         now = utc_now()
         with transaction(self.connection):
             cursor = self.connection.execute(
@@ -563,10 +565,78 @@ class AudioService:
             )
             if cursor.rowcount == 0:
                 raise HTTPException(status_code=404, detail="Audio file not found")
+            job_rows = self.connection.execute(
+                "SELECT id FROM transcription_jobs WHERE audio_file_id = ?",
+                (audio_id,),
+            ).fetchall()
             self.connection.execute(
                 "UPDATE transcription_jobs SET status = 'deleted' WHERE audio_file_id = ?",
                 (audio_id,),
             )
+        return [str(row["id"]) for row in job_rows]
+
+    def purge_deleted_older_than(self, *, retention_days: int = DELETED_AUDIO_RETENTION_DAYS) -> int:
+        cutoff = (datetime.now(UTC) - timedelta(days=retention_days)).isoformat()
+        rows = self.connection.execute(
+            """
+            SELECT id, stored_filename, file_path
+            FROM audio_files
+            WHERE deleted_at IS NOT NULL AND deleted_at <= ?
+            ORDER BY deleted_at ASC
+            """,
+            (cutoff,),
+        ).fetchall()
+
+        purged_count = 0
+        for row in rows:
+            audio = dict(row)
+            audio_path = self._purge_candidate_path(audio)
+            if audio_path is not None:
+                try:
+                    audio_path.unlink()
+                except FileNotFoundError:
+                    pass
+                except OSError:
+                    logger.exception("Failed to remove expired deleted audio file audio_id=%s", audio["id"])
+                    continue
+
+            with transaction(self.connection):
+                job_rows = self.connection.execute(
+                    "SELECT id FROM transcription_jobs WHERE audio_file_id = ?",
+                    (audio["id"],),
+                ).fetchall()
+                self.connection.execute(
+                    """
+                    DELETE FROM transcript_sentences
+                    WHERE job_id IN (
+                        SELECT id FROM transcription_jobs WHERE audio_file_id = ?
+                    )
+                    """,
+                    (audio["id"],),
+                )
+                self.connection.execute(
+                    """
+                    DELETE FROM speakers
+                    WHERE job_id IN (
+                        SELECT id FROM transcription_jobs WHERE audio_file_id = ?
+                    )
+                    """,
+                    (audio["id"],),
+                )
+                self.connection.execute(
+                    "DELETE FROM transcription_jobs WHERE audio_file_id = ?",
+                    (audio["id"],),
+                )
+                cursor = self.connection.execute(
+                    "DELETE FROM audio_files WHERE id = ? AND deleted_at IS NOT NULL",
+                    (audio["id"],),
+                )
+            for job_row in job_rows:
+                self._remove_job_log(str(job_row["id"]))
+            purged_count += cursor.rowcount
+        if purged_count:
+            logger.info("Purged %s deleted audio item(s) past retention", purged_count)
+        return purged_count
 
     def stream_info(self, audio_id: str) -> tuple[Path, str]:
         audio = self.get_audio(audio_id)
@@ -609,6 +679,41 @@ class AudioService:
             if legacy_path.exists():
                 return legacy_path
         return None
+
+    def _purge_candidate_path(self, audio: dict[str, Any]) -> Path | None:
+        uploads_dir = self.config.uploads_dir.resolve()
+        candidates: list[Path] = []
+        stored_filename = audio.get("stored_filename")
+        if isinstance(stored_filename, str) and stored_filename:
+            candidates.append((uploads_dir / stored_filename).resolve())
+        raw_path = audio.get("file_path")
+        if isinstance(raw_path, str) and raw_path:
+            candidates.append(Path(raw_path).expanduser().resolve())
+
+        for candidate in candidates:
+            try:
+                candidate.relative_to(uploads_dir)
+            except ValueError:
+                logger.warning("Skipping purge file outside uploads directory: %s", candidate)
+                continue
+            if candidate.exists():
+                return candidate
+        return None
+
+    def _remove_job_log(self, job_id: str) -> None:
+        log_path = (self.config.logs_dir / "jobs" / f"{job_id}.log").resolve()
+        logs_dir = (self.config.logs_dir / "jobs").resolve()
+        try:
+            log_path.relative_to(logs_dir)
+        except ValueError:
+            logger.warning("Skipping purge log outside jobs log directory: %s", log_path)
+            return
+        try:
+            log_path.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError:
+            logger.exception("Failed to remove expired deleted job log job_id=%s", job_id)
 
 
 class JobService:
@@ -1072,7 +1177,10 @@ class DatabaseTranscriptWriter:
         samples: dict[str, tuple[float, float]] = {}
         for sentence in sentences:
             speaker_key = sentence.speaker_key or "SPEAKER_00"
-            samples.setdefault(speaker_key, (sentence.start_time, sentence.end_time))
+            sample = (sentence.start_time, sentence.end_time)
+            current_sample = samples.get(speaker_key)
+            if current_sample is None or (sample[1] - sample[0]) > (current_sample[1] - current_sample[0]):
+                samples[speaker_key] = sample
 
         with transaction(self.connection):
             self.connection.execute("DELETE FROM transcript_sentences WHERE job_id = ?", (job_id,))

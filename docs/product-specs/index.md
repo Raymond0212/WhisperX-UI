@@ -4,6 +4,6 @@ This directory contains product-facing specifications for WhisperX UI. Product s
 
 ## Specs
 
-| Spec | Status | Purpose |
-| --- | --- | --- |
-| [WhisperX Web UI MVP](whisperx-web-ui-mvp.md) | Active | Canonical MVP product requirements for the local-first WhisperX web UI. |
+| Spec                                  | Status | Purpose                                                             |
+| ------------------------------------- | ------ | ------------------------------------------------------------------- |
+| [WhisperX Web UI](whisperx-web-ui.md) | Active | Canonical product requirements for the local-first WhisperX web UI. |

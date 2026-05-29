@@ -53,7 +53,7 @@ Processor-specific implementations should sit behind service boundaries so engin
 
 ## Speaker Samples
 
-Speaker samples should use the uploaded audio source and timestamp ranges when possible. The system should store `sample_start` and `sample_end` for each speaker rather than generating separate clip files for MVP.
+Speaker samples should use the uploaded audio source and timestamp ranges when possible. The system should store `sample_start` and `sample_end` for each speaker rather than generating separate clip files. When selecting from sentence ranges, it should pick the longest sample sentence by default.
 
 ## Electron Compatibility
 

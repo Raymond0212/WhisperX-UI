@@ -33,4 +33,4 @@ Every processing job should persist the model settings that produced it. A trans
 
 ## Prefer Recoverable Local Operations
 
-The MVP should favor soft deletion, persisted failure messages, and retained uploads. Permanent data removal can be added later as an explicit destructive action.
+The app should favor persisted failure messages, stable local records, and a retention window before permanent audio deletion.

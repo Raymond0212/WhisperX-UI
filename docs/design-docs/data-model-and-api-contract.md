@@ -2,66 +2,66 @@
 
 ## Data Model
 
-The MVP uses SQLite for structured persistence.
+Uses SQLite for structured persistence.
 
 ### Audio File
 
 Represents one uploaded audio file.
 
-| Field | Purpose |
-| --- | --- |
-| `id` | Unique audio ID. |
-| `original_filename` | Filename provided by the upload. |
-| `stored_filename` | Unique local filename. |
-| `display_title` | User-editable title. |
-| `file_path` | Local path to stored audio. |
-| `mime_type` | Uploaded MIME type. |
-| `duration_seconds` | Audio duration when known. |
-| `size_bytes` | File size. |
-| `created_at` | Upload timestamp. |
-| `deleted_at` | Soft delete timestamp. |
-| `speaker_count` | Exact speaker count hint when provided. |
-| `min_speakers` | Minimum speaker hint when provided. |
-| `max_speakers` | Maximum speaker hint when provided. |
+| Field               | Purpose                                 |
+| ------------------- | --------------------------------------- |
+| `id`                | Unique audio ID.                        |
+| `original_filename` | Filename provided by the upload.        |
+| `stored_filename`   | Unique local filename.                  |
+| `display_title`     | User-editable title.                    |
+| `file_path`         | Local path to stored audio.             |
+| `mime_type`         | Uploaded MIME type.                     |
+| `duration_seconds`  | Audio duration when known.              |
+| `size_bytes`        | File size.                              |
+| `created_at`        | Upload timestamp.                       |
+| `deleted_at`        | Soft delete timestamp.                  |
+| `speaker_count`     | Exact speaker count hint when provided. |
+| `min_speakers`      | Minimum speaker hint when provided.     |
+| `max_speakers`      | Maximum speaker hint when provided.     |
 
 ### Transcription Job
 
 Represents one processing run for an audio file.
 
-| Field | Purpose |
-| --- | --- |
-| `id` | Unique job ID. |
-| `audio_file_id` | Related audio file. |
-| `status` | Job state. |
-| `transcription_engine` | Engine used. |
-| `transcription_model` | Model used. |
-| `diarization_engine` | Engine used. |
-| `diarization_model` | Model used. |
-| `language` | Language config. |
-| `device` | CPU, CUDA, or auto. |
-| `compute_type` | `float16`, `int8`, or similar. |
-| `batch_size` | Processing batch size. |
-| `speaker_count` | Exact speaker count when provided. |
-| `min_speakers` | Minimum speakers when provided. |
-| `max_speakers` | Maximum speakers when provided. |
-| `settings_json` | Serialized job settings after broad secret-like keys are stripped; exact `diarization_token` and `hf_token` keys are currently preserved and should be treated as security debt. |
-| `error_message` | Failure reason. |
-| `created_at` | Creation timestamp. |
-| `queued_at` | Queue insertion timestamp. |
-| `started_at` | Processing start timestamp. |
-| `completed_at` | Processing completion timestamp. |
-| `worker_pid` | Worker process ID when assigned. |
-| `worker_started_at` | Worker launch timestamp. |
-| `last_heartbeat_at` | Last worker heartbeat timestamp. |
-| `worker_exit_code` | Worker exit code when known. |
-| `worker_signal` | Worker signal when process was terminated by signal. |
-| `runtime_device` | Device actually used by processing when known. |
-| `runtime_device_note` | Runtime device fallback or selection note when known. |
-| `progress_stage` | Current processing stage label. |
-| `progress_percent` | Approximate stage-weighted completion percent (`0..100`). |
-| `progress_message` | User-facing stage text for non-blocking UI progress display. |
-| `progress_stage_started_at` | Timestamp when current stage started. |
-| `progress_updated_at` | Timestamp for most recent progress update. |
+| Field                       | Purpose                                                                                                                                                                          |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                        | Unique job ID.                                                                                                                                                                   |
+| `audio_file_id`             | Related audio file.                                                                                                                                                              |
+| `status`                    | Job state.                                                                                                                                                                       |
+| `transcription_engine`      | Engine used.                                                                                                                                                                     |
+| `transcription_model`       | Model used.                                                                                                                                                                      |
+| `diarization_engine`        | Engine used.                                                                                                                                                                     |
+| `diarization_model`         | Model used.                                                                                                                                                                      |
+| `language`                  | Language config.                                                                                                                                                                 |
+| `device`                    | CPU, CUDA, or auto.                                                                                                                                                              |
+| `compute_type`              | `float16`, `int8`, or similar.                                                                                                                                                   |
+| `batch_size`                | Processing batch size.                                                                                                                                                           |
+| `speaker_count`             | Exact speaker count when provided.                                                                                                                                               |
+| `min_speakers`              | Minimum speakers when provided.                                                                                                                                                  |
+| `max_speakers`              | Maximum speakers when provided.                                                                                                                                                  |
+| `settings_json`             | Serialized job settings after broad secret-like keys are stripped; exact `diarization_token` and `hf_token` keys are currently preserved and should be treated as security debt. |
+| `error_message`             | Failure reason.                                                                                                                                                                  |
+| `created_at`                | Creation timestamp.                                                                                                                                                              |
+| `queued_at`                 | Queue insertion timestamp.                                                                                                                                                       |
+| `started_at`                | Processing start timestamp.                                                                                                                                                      |
+| `completed_at`              | Processing completion timestamp.                                                                                                                                                 |
+| `worker_pid`                | Worker process ID when assigned.                                                                                                                                                 |
+| `worker_started_at`         | Worker launch timestamp.                                                                                                                                                         |
+| `last_heartbeat_at`         | Last worker heartbeat timestamp.                                                                                                                                                 |
+| `worker_exit_code`          | Worker exit code when known.                                                                                                                                                     |
+| `worker_signal`             | Worker signal when process was terminated by signal.                                                                                                                             |
+| `runtime_device`            | Device actually used by processing when known.                                                                                                                                   |
+| `runtime_device_note`       | Runtime device fallback or selection note when known.                                                                                                                            |
+| `progress_stage`            | Current processing stage label.                                                                                                                                                  |
+| `progress_percent`          | Approximate stage-weighted completion percent (`0..100`).                                                                                                                        |
+| `progress_message`          | User-facing stage text for non-blocking UI progress display.                                                                                                                     |
+| `progress_stage_started_at` | Timestamp when current stage started.                                                                                                                                            |
+| `progress_updated_at`       | Timestamp for most recent progress update.                                                                                                                                       |
 
 Suggested statuses:
 
@@ -78,58 +78,58 @@ deleted
 
 Represents one detected speaker in one job.
 
-| Field | Purpose |
-| --- | --- |
-| `id` | Unique speaker record ID. |
-| `job_id` | Related job. |
-| `speaker_key` | Stable diarization label such as `SPEAKER_00`. |
-| `display_name` | User-facing name. |
-| `sample_start` | Sample playback start timestamp. |
-| `sample_end` | Sample playback end timestamp. |
-| `created_at` | Creation timestamp. |
-| `updated_at` | Last update timestamp. |
+| Field          | Purpose                                        |
+| -------------- | ---------------------------------------------- |
+| `id`           | Unique speaker record ID.                      |
+| `job_id`       | Related job.                                   |
+| `speaker_key`  | Stable diarization label such as `SPEAKER_00`. |
+| `display_name` | User-facing name.                              |
+| `sample_start` | Sample playback start timestamp.               |
+| `sample_end`   | Sample playback end timestamp.                 |
+| `created_at`   | Creation timestamp.                            |
+| `updated_at`   | Last update timestamp.                         |
 
 ### Transcript Sentence
 
 Represents the canonical transcript segment.
 
-| Field | Purpose |
-| --- | --- |
-| `id` | Unique sentence ID. |
-| `job_id` | Related job. |
-| `speaker_id` | Related speaker. |
-| `sentence_index` | Order in transcript. |
-| `start_time` | Start timestamp. |
-| `end_time` | End timestamp. |
-| `original_text` | Original transcription text. |
-| `current_text` | Edited or current text. |
-| `confidence` | Optional confidence score. |
-| `words_json` | Optional word-level timestamp data. |
-| `created_at` | Creation timestamp. |
-| `updated_at` | Last update timestamp. |
+| Field            | Purpose                             |
+| ---------------- | ----------------------------------- |
+| `id`             | Unique sentence ID.                 |
+| `job_id`         | Related job.                        |
+| `speaker_id`     | Related speaker.                    |
+| `sentence_index` | Order in transcript.                |
+| `start_time`     | Start timestamp.                    |
+| `end_time`       | End timestamp.                      |
+| `original_text`  | Original transcription text.        |
+| `current_text`   | Edited or current text.             |
+| `confidence`     | Optional confidence score.          |
+| `words_json`     | Optional word-level timestamp data. |
+| `created_at`     | Creation timestamp.                 |
+| `updated_at`     | Last update timestamp.              |
 
 ### App Setting
 
 Stores preferences and default model choices.
 
-| Field | Purpose |
-| --- | --- |
-| `key` | Setting name. |
+| Field        | Purpose                   |
+| ------------ | ------------------------- |
+| `key`        | Setting name.             |
 | `value_json` | Serialized setting value. |
-| `updated_at` | Last update timestamp. |
+| `updated_at` | Last update timestamp.    |
 
 ### Provider Credential
 
 Stores encrypted local provider credentials.
 
-| Field | Purpose |
-| --- | --- |
-| `id` | Unique credential record ID. |
-| `provider` | Provider key, currently `huggingface`. |
-| `display_name` | User-facing provider name. |
+| Field               | Purpose                                               |
+| ------------------- | ----------------------------------------------------- |
+| `id`                | Unique credential record ID.                          |
+| `provider`          | Provider key, currently `huggingface`.                |
+| `display_name`      | User-facing provider name.                            |
 | `encrypted_api_key` | Encrypted token payload; never returned as plaintext. |
-| `created_at` | Creation timestamp. |
-| `updated_at` | Last update timestamp. |
+| `created_at`        | Creation timestamp.                                   |
+| `updated_at`        | Last update timestamp.                                |
 
 ## API Contract
 
@@ -161,6 +161,7 @@ Current implementation notes:
 - Stored filenames use a UUID prefix plus a sanitized source filename.
 - MIME type is normalized from the filename when the supplied content type is not audio.
 - Streaming and download resolve the stored path and require it to remain inside the configured uploads directory.
+- `DELETE /api/audio/{audio_id}` sets `deleted_at`, hides the audio from normal listings, marks related jobs `deleted`, and terminates active local workers for those jobs; backend startup and the daily local-midnight retention task purge deleted audio, related rows, and per-job log files after the 30-day retention window.
 
 ### Job APIs
 
@@ -189,13 +190,15 @@ Current implementation notes:
 - Stale `processing` jobs with missing or expired heartbeats are reconciled to `failed`.
 - Job responses include progress metadata (`progress_stage`, `progress_percent`, `progress_message`, `progress_stage_started_at`, `progress_updated_at`) for stage-level UI feedback while polling.
 - Progress percentages are approximate, stage-weighted estimates (not exact model inference completion).
-- `DELETE /api/jobs/{job_id}` marks the job `deleted`, sets `completed_at`, clears `error_message`, and asks the queue service to terminate an active local worker for that job.
+- `DELETE /api/jobs/{job_id}` marks the job `deleted`, sets `completed_at`, clears `error_message`, and asks the queue service to terminate an active local worker for that job only.
+- After targeted termination, that queue capacity slot remains occupied until the terminated worker exits and the scheduler reaps its handle.
 - `GET /api/audio/{audio_id}/jobs` omits jobs whose status is `deleted`.
 - Request `settings` may carry transient runtime-only values such as `diarization_token` or `hf_token`. Broad secret-like setting keys are stripped, but exact `diarization_token` and `hf_token` keys are currently preserved in persisted `settings_json` and can appear in job response `settings`; this is a documented security debt item, not desired long-term behavior.
 - Token-enabled pyannote diarization passes a preloaded `{waveform, sample_rate}` input to the pipeline. Audio decoding tries torchaudio's soundfile backend, then torchaudio's default loader, then falls back to `faster_whisper.audio.decode_audio`; multi-channel input is averaged to mono float32.
 - If a diarization token is present, pyannote diarization runs and its output is normalized into timestamped speaker intervals. The parser accepts the pyannote community wrapper's `exclusive_speaker_diarization`, falls back to `speaker_diarization`, then to raw `itertracks` annotations or interval dictionaries.
 - Token-enabled speaker assignment first labels faster-whisper words by strongest diarization interval overlap. Boundary ties keep the first matching diarization interval, and non-overlapping gaps fall back to the nearest interval so assignment remains deterministic.
 - Persistence preserves speaker changes inside faster-whisper sentence windows: when timed words in one sentence-sized window contain multiple speaker runs, the backend persists separate speaker-consistent sub-sentence rows rather than flattening the whole window to one speaker. If no word assignment is available for a segment, segment-level interval overlap is used.
+- Speaker sample timestamps are selected from the longest persisted sentence for each speaker, preserving the earliest sentence when durations tie.
 - If a diarization token is missing, the job still completes with single-speaker fallback labels (`SPEAKER_00`).
 
 ### Local Model APIs

@@ -43,7 +43,7 @@ def _utc_now() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def test_model_options_exposes_phase2_registry_and_defaults(tmp_path, monkeypatch):
+def test_model_options_exposes_registry_and_defaults(tmp_path, monkeypatch):
     with _client(tmp_path, monkeypatch) as client:
         response = client.get("/api/model-options")
         assert response.status_code == 200
@@ -213,7 +213,7 @@ def test_vtt_service_renders_sentence_and_speaker_turn_exports():
     assert "00:00:01.500 --> 00:00:03.000\nAlice: Still Alice." not in speaker_turn_vtt
 
 
-def test_job_create_uses_phase2_engine_fields(tmp_path, monkeypatch):
+def test_job_create_uses_engine_fields(tmp_path, monkeypatch):
     services_module = importlib.import_module("whisperx_ui_backend.services")
 
     class FakeProcessor:
@@ -318,7 +318,7 @@ def test_list_audio_jobs_excludes_deleted_rows(tmp_path, monkeypatch):
         assert deleted_job_id not in job_ids
 
 
-def test_settings_default_to_phase2_contract(tmp_path, monkeypatch):
+def test_settings_default_to_current_contract(tmp_path, monkeypatch):
     with _client(tmp_path, monkeypatch) as client:
         settings = client.get("/api/settings").json()
         assert settings["transcription_engine"] == "faster-whisper"
@@ -824,7 +824,7 @@ def test_invalid_diarization_model_validation_fails_job_cleanly(tmp_path, monkey
         assert "Unsupported diarization model: not-supported" in job["error_message"]
 
 
-def test_settings_sanitize_legacy_or_invalid_models_to_phase2_defaults(tmp_path, monkeypatch):
+def test_settings_sanitize_legacy_or_invalid_models_to_current_defaults(tmp_path, monkeypatch):
     with _client(tmp_path, monkeypatch) as client:
         save_response = client.patch(
             "/api/settings",

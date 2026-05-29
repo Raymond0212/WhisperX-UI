@@ -92,5 +92,4 @@ Processor-specific code should not leak into UI components or database models ex
 - Speaker display names are user-editable, but internal diarization labels remain stable.
 - Original transcription output is preserved even when current transcript text changes.
 - Speaker-turn transcript chunks are display-only aggregations over adjacent sentence records.
-- Processing reports queued/processing/completed/failed/deleted states plus approximate staged progress fields for polling UI; exact real-time model inference progress is not required for MVP.
-- Soft delete is the MVP deletion behavior for uploaded audio and related UI visibility.
+- Audio deletion is recoverable during the 30-day retention window: normal views hide soft-deleted rows immediately, and the backend purges expired deleted rows and uploaded audio bytes on startup and daily at local midnight.

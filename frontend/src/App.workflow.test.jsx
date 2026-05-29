@@ -13,7 +13,7 @@ function jsonResponse(data, status = 200) {
   });
 }
 
-function createApiMock({ settingsOverrides = {} } = {}) {
+function createApiMock({ settingsOverrides = {}, jobPollsBeforeComplete = 2 } = {}) {
   const requests = [];
   const uploadedAudio = {
     id: "audio-uploaded",
@@ -154,7 +154,7 @@ function createApiMock({ settingsOverrides = {} } = {}) {
 
     if (method === "GET" && path === "/api/jobs/job-complete") {
       createdJobPollCount += 1;
-      if (createdJobPollCount < 2) {
+      if (createdJobPollCount < jobPollsBeforeComplete) {
         return jsonResponse({
           ...completedJob,
           status: "processing",
@@ -170,7 +170,7 @@ function createApiMock({ settingsOverrides = {} } = {}) {
       const jobId = path.split("/").at(-1);
       if (jobId === "job-complete") {
         createdJobPollCount += 1;
-        if (createdJobPollCount < 2) {
+        if (createdJobPollCount < jobPollsBeforeComplete) {
           return jsonResponse({
             ...completedJob,
             status: "processing",
@@ -269,7 +269,7 @@ afterEach(() => {
   cleanup();
 });
 
-test("drives the MVP upload, process, review, edit, export, failed job, and delete workflow", async () => {
+test("drives the upload, process, review, edit, export, failed job, and delete workflow", async () => {
   const { fetchMock, requests } = createApiMock();
   vi.stubGlobal("fetch", fetchMock);
   const play = vi.spyOn(window.HTMLMediaElement.prototype, "play").mockImplementation(() => {});
@@ -345,7 +345,7 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   fireEvent.timeUpdate(player);
   expect(pause).toHaveBeenCalledTimes(1);
 
-  fireEvent.click(screen.getByRole("button", { name: /play sentence sentence-1/i }));
+  fireEvent.click(screen.getAllByRole("button", { name: /play sentence sentence-1/i })[0]);
   expect(player.currentTime).toBe(1);
   expect(play).toHaveBeenCalledTimes(2);
   player.currentTime = 3;
@@ -374,6 +374,10 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   });
 
   fireEvent.click(screen.getByRole("button", { name: /speaker turns/i }));
+  const turnSentenceButton = screen.getAllByRole("button", { name: /play sentence sentence-1/i }).at(-1);
+  fireEvent.click(turnSentenceButton);
+  expect(player.currentTime).toBe(1);
+  expect(play).toHaveBeenCalledTimes(3);
   const turnExport = screen.getByRole("button", { name: /download speaker turn vtt/i });
   expect(turnExport.dataset.exportUrl).toBe(
     `${API_BASE}/api/jobs/job-complete/export.vtt?view=speaker-turns`,
@@ -382,8 +386,8 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   confirm.mockReturnValueOnce(false);
   fireEvent.click(turnExport);
   expect(confirm).toHaveBeenCalledWith("Download the speaker turn based VTT export?");
-  await screen.findByRole("button", { name: /edit sentence sentence-1/i });
-  fireEvent.click(screen.getByRole("button", { name: /edit sentence sentence-1/i }));
+  await screen.findAllByRole("button", { name: /play sentence sentence-1/i });
+  fireEvent.doubleClick(screen.getAllByRole("button", { name: /play sentence sentence-1/i }).at(-1));
   const turnSentenceText = screen.getByRole("textbox", { name: /transcript sentence sentence-1/i });
   turnSentenceText.textContent = "Hello turn edit.";
   fireEvent.blur(turnSentenceText);
@@ -407,6 +411,69 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   });
   expect(await screen.findByRole("button", { name: /delete audio/i })).not.toBeNull();
   expect(screen.getAllByText("Demo upload").length).toBeGreaterThan(0);
+});
+
+test("confirms and deletes an uploaded audio item", async () => {
+  const { fetchMock, requests } = createApiMock();
+  vi.stubGlobal("fetch", fetchMock);
+  const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+
+  render(<App />);
+
+  expect(await screen.findByText("Broken clip")).not.toBeNull();
+  const file = new File(["demo audio"], "meeting.wav", { type: "audio/wav" });
+  fireEvent.change(screen.getByLabelText("Audio file"), { target: { files: [file] } });
+  fireEvent.change(screen.getByPlaceholderText("Optional display title"), {
+    target: { value: "Demo upload" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /upload/i }));
+
+  await screen.findByDisplayValue("Demo upload");
+  fireEvent.click(screen.getByRole("button", { name: /delete audio/i }));
+  expect(confirm).toHaveBeenCalledWith("Delete this audio item? This cannot be undone.");
+  expect(requests.some((request) => request.method === "DELETE" && request.path === "/api/audio/audio-uploaded")).toBe(
+    false,
+  );
+  expect(screen.getAllByText("Demo upload").length).toBeGreaterThan(0);
+
+  fireEvent.click(screen.getByRole("button", { name: /delete audio/i }));
+  await waitFor(() => {
+    expect(requests.some((request) => request.method === "DELETE" && request.path === "/api/audio/audio-uploaded")).toBe(
+      true,
+    );
+  });
+  expect(screen.queryByText("Demo upload")).toBeNull();
+  expect(screen.getByText(/select an audio file/i)).not.toBeNull();
+});
+
+test("stops the active processing job from the primary process button", async () => {
+  const { fetchMock, requests } = createApiMock({ jobPollsBeforeComplete: Number.POSITIVE_INFINITY });
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(<App />);
+
+  expect(await screen.findByText("Broken clip")).not.toBeNull();
+  const file = new File(["demo audio"], "meeting.wav", { type: "audio/wav" });
+  fireEvent.change(screen.getByLabelText("Audio file"), { target: { files: [file] } });
+  fireEvent.change(screen.getByPlaceholderText("Optional display title"), {
+    target: { value: "Demo upload" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /upload/i }));
+
+  await screen.findByDisplayValue("Demo upload");
+  fireEvent.click(screen.getByRole("button", { name: /^process$/i }));
+  expect(await screen.findByRole("button", { name: /^stop$/i })).not.toBeNull();
+
+  fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+  await waitFor(() => {
+    expect(requests.some((request) => request.method === "DELETE" && request.path === "/api/jobs/job-complete")).toBe(
+      true,
+    );
+  });
+  expect(await screen.findByText("Processing stopped.")).not.toBeNull();
+  expect(screen.getByRole("button", { name: /^process$/i })).not.toBeNull();
+  expect(screen.queryByLabelText("Transcription progress")).toBeNull();
 });
 
 test("uses stored backend HF token without sending token from frontend payloads", async () => {

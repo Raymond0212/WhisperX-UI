@@ -59,6 +59,7 @@ class JobQueueService:
         process = self._workers.get(job_id)
         if process and process.poll() is None:
             process.terminate()
+        self._wake_event.set()
 
     def _run_loop(self) -> None:
         self._reconcile_stale_processing_jobs()
@@ -313,7 +314,7 @@ class _InlineWorkerProcess:
         connection = connect(self.config.database_path)
         try:
             with transaction(connection):
-                connection.execute(
+                result = connection.execute(
                     """
                     UPDATE transcription_jobs
                     SET status = 'processing',
@@ -325,6 +326,9 @@ class _InlineWorkerProcess:
                     """,
                     (utc_now(), self.pid, utc_now(), utc_now(), self.job_id),
                 )
+                if result.rowcount == 0:
+                    self._return_code = 0
+                    return
             JobProgressReporter(connection).set_stage(self.job_id, "starting")
             run_job_execution(connection, self.config, self.job_id)
             self._return_code = 0

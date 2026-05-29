@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
+from contextlib import suppress
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Annotated
 
@@ -39,6 +42,22 @@ from .services import (
 )
 
 
+def seconds_until_next_local_midnight(now: datetime | None = None) -> float:
+    current = now or datetime.now().astimezone()
+    tomorrow = current.date() + timedelta(days=1)
+    next_midnight = datetime.combine(tomorrow, datetime.min.time(), tzinfo=current.tzinfo)
+    return max(0.0, (next_midnight - current).total_seconds())
+
+
+async def run_daily_retention_purge(connection, config: AppConfig) -> None:
+    while True:
+        await asyncio.sleep(seconds_until_next_local_midnight())
+        try:
+            AudioService(connection, config).purge_deleted_older_than()
+        except Exception:
+            logging.getLogger(__name__).exception("Daily deleted-audio purge failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logging.basicConfig(
@@ -53,14 +72,20 @@ async def lifespan(app: FastAPI):
     )
     connection = connect(config.database_path)
     initialize_database(connection)
+    AudioService(connection, config).purge_deleted_older_than()
+    retention_purge_task = asyncio.create_task(run_daily_retention_purge(connection, config))
     job_queue = JobQueueService(config)
     job_queue.start()
     app.state.config = config
     app.state.connection = connection
     app.state.job_queue = job_queue
+    app.state.retention_purge_task = retention_purge_task
     try:
         yield
     finally:
+        retention_purge_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await retention_purge_task
         job_queue.stop()
         connection.close()
 
@@ -154,7 +179,9 @@ def update_audio(
 
 @app.delete("/api/audio/{audio_id}", status_code=204)
 def delete_audio(audio_id: str, service: AudioService = Depends(audio_service)):
-    service.soft_delete(audio_id)
+    deleted_job_ids = service.soft_delete(audio_id)
+    for job_id in deleted_job_ids:
+        app.state.job_queue.terminate_job(job_id)
     return None
 
 

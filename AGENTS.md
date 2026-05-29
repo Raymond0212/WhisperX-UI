@@ -2,7 +2,7 @@
 
 ## Overview
 
-WhisperX UI is planned as a single-user, local-first desktop-style web application for uploading audio, running faster-whisper transcription and optional Hugging Face pyannote diarization, reviewing sentence-level transcripts, editing text, renaming speakers, playing timestamped audio, and exporting VTT.
+WhisperX UI is a single-user, local-first desktop-style web application for uploading audio, running faster-whisper transcription and optional Hugging Face pyannote diarization, reviewing sentence-level transcripts, editing text, renaming speakers, playing timestamped audio, and exporting VTT.
 
 The implementation target is:
 
@@ -14,7 +14,7 @@ The implementation target is:
 ## Documentation Entry Points
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): top-level system architecture, subsystem boundaries, and dependency direction.
-- [docs/product-specs/index.md](docs/product-specs/index.md): product behavior and MVP requirements.
+- [docs/product-specs/index.md](docs/product-specs/index.md): product behavior requirements.
 - [docs/design-docs/index.md](docs/design-docs/index.md): design decisions, rationale, and implementation constraints.
 - [docs/ORCHISTRATION.md](docs/ORCHISTRATION.md): orchestration workflow for multi-agent implementation cycles.
 - [docs/generated/db-schema.md](docs/generated/db-schema.md): code-derived SQLite schema reference.
