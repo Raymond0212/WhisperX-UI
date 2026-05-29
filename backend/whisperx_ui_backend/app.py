@@ -40,6 +40,7 @@ from .services import (
     TranscriptService,
     VttService,
 )
+from .static_files import mount_frontend
 
 
 def seconds_until_next_local_midnight(now: datetime | None = None) -> float:
@@ -303,3 +304,6 @@ def store_hf_token(
 ):
     service.store_hf_token(request.hf_token)
     return None
+
+
+mount_frontend(app)
