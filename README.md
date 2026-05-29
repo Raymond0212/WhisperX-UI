@@ -26,7 +26,7 @@ The one-click scripts load `.env` when present, sync backend dependencies, insta
 
 ```bash
 uv sync --extra test
-uv run uvicorn whisperx_ui_backend.app:app --app-dir backend --reload
+uv run uvicorn whisperx_ui_backend.app:app --app-dir backend --reload --reload-dir backend --reload-dir tests
 ```
 
 The backend defaults to `app_data/` for SQLite, uploads, exports, logs, and models. Override with:

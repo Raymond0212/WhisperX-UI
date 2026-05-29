@@ -12,7 +12,7 @@ The frontend is a React browser UI designed for local use and future Electron pa
 - Transcript Review: audio player, speaker samples, speaker renaming, sentence view, speaker-turn view, transcript editing, sentence playback, and VTT export.
 - Settings: default transcription model, diarization model, and runtime defaults for local processing.
 
-Current implementation covers the core upload/library/workspace/settings flow with drag-and-drop upload, title editing, model config controls, one-click basic local model preparation, audio playback through the backend stream endpoint, sentence and speaker-turn review, speaker renaming, sentence edit-on-blur, and VTT export. It does not yet include all metadata display details such as duration or storage-location controls.
+Current implementation covers the core upload/library/workspace/settings flow with drag-and-drop upload, title editing, model config controls, one-click basic local model preparation, audio playback through the backend stream endpoint, sentence and speaker-turn review, speaker renaming, sentence edit-on-blur, and sentence-based or speaker-turn-based VTT export. It does not yet include all metadata display details such as duration or storage-location controls.
 
 ## Interaction Rules
 
@@ -30,6 +30,7 @@ Current implementation covers the core upload/library/workspace/settings flow wi
 - Before processing, call the backend basic model preparation endpoint so the required Hugging Face model is downloaded into local app storage if missing.
 - Treat per-job Diarization/HF token input as runtime-only request data. Saved Hugging Face tokens must go through the backend secret endpoint and should be represented in UI only by masked state such as `hf_token_stored`.
 - Use save-on-blur or short debounce autosave for transcript sentence edits.
+- Show only the active transcript view's VTT download action and confirm whether the user is downloading the sentence-based or speaker-turn-based export.
 - Show failed job status and error messages in the UI.
 - While polling `GET /api/jobs/{job_id}`, render progress from `progress_stage`, `progress_percent`, and `progress_message` in a non-blocking way that blends into the workspace (no modal/overlay).
 - Hide soft-deleted audio from the normal library view.

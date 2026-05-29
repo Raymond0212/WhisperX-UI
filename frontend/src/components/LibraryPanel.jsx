@@ -6,6 +6,7 @@ export function LibraryPanel({
   fileInputRef,
   filteredAudioItems,
   jobs,
+  selectedJob,
   onOpenJob,
   onFileInput,
   onProcessAudio,
@@ -56,6 +57,7 @@ export function LibraryPanel({
               isActive={selectedAudio?.id === audio.id}
               key={audio.id}
               jobs={jobs}
+              selectedJob={selectedJob}
               onOpenJob={onOpenJob}
               onProcessAudio={onProcessAudio}
               onSelectAudio={onSelectAudio}
@@ -70,8 +72,10 @@ export function LibraryPanel({
   );
 }
 
-function LibraryRow({ audio, isActive, jobs, onOpenJob, onProcessAudio, onSelectAudio }) {
-  const status = audio.latest_job_status || "uploaded";
+function LibraryRow({ audio, isActive, jobs, selectedJob, onOpenJob, onProcessAudio, onSelectAudio }) {
+  const activeJobStatus = isActive && selectedJob?.audio_file_id === audio.id ? selectedJob.status : null;
+  const latestSubJobStatus = isActive && jobs.length > 0 ? jobs[0].status : null;
+  const status = activeJobStatus || latestSubJobStatus || audio.latest_job_status || "uploaded";
   const isProcessing = status === "processing" || status === "queued" || status === "running";
   const isCompleted = status === "completed";
 
@@ -107,7 +111,7 @@ function LibraryRow({ audio, isActive, jobs, onOpenJob, onProcessAudio, onSelect
           {jobs.map((job, index) => (
             <button type="button" key={job.id} className="library-job-pill" onClick={() => onOpenJob(job)}>
               <span>Run {jobs.length - index} · {job.transcription_model}</span>
-              {job.status === "processing" ? (
+              {job.status === "processing" || job.status === "queued" || job.status === "running" ? (
                 <LoaderCircle size={14} className="library-job-status processing" aria-label="Processing" />
               ) : job.status === "completed" ? (
                 <Check size={14} className="library-job-status completed" aria-label="Completed" />

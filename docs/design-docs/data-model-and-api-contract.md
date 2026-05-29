@@ -227,14 +227,16 @@ Current implementation notes:
 ```http
 GET /api/jobs/{job_id}/transcript
 PATCH /api/transcript-sentences/{sentence_id}
-GET /api/jobs/{job_id}/export.vtt
+GET /api/jobs/{job_id}/export.vtt?view=sentences
+GET /api/jobs/{job_id}/export.vtt?view=speaker-turns
 ```
 
 Responsibilities:
 
 - return sentence-level transcript records
 - update `current_text` only for transcript edits
-- export VTT using current text and current speaker display names
+- export sentence-based VTT using current text and current speaker display names
+- export speaker-turn-based VTT by grouping adjacent sentences with the same speaker while preserving stored sentence records
 
 ### Speaker APIs
 

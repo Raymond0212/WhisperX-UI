@@ -49,6 +49,7 @@ export function App() {
   const fileInputRef = useRef(null);
   const dragDepthRef = useRef(0);
   const audioRef = useRef(null);
+  const selectedAudioRef = useRef(null);
   const playbackControllerRef = useRef(null);
   const toastIdRef = useRef(0);
   const toastTimersRef = useRef(new Map());
@@ -92,6 +93,10 @@ export function App() {
       toastTimersRef.current.clear();
     };
   }, []);
+
+  useEffect(() => {
+    selectedAudioRef.current = selectedAudio;
+  }, [selectedAudio]);
 
   useEffect(() => {
     const player = audioRef.current;
@@ -356,7 +361,9 @@ export function App() {
         }),
       ),
     });
-    setSelectedJob(job);
+    if (selectedAudioRef.current?.id === audioOverride.id) {
+      setSelectedJob(job);
+    }
     let resolvedJob = job;
     const startedAt = Date.now();
     while (resolvedJob.status === "queued" || resolvedJob.status === "processing") {
@@ -365,7 +372,9 @@ export function App() {
       }
       await new Promise((resolve) => window.setTimeout(resolve, 250));
       resolvedJob = await api(`/api/jobs/${resolvedJob.id}`);
-      setSelectedJob(resolvedJob);
+      if (selectedAudioRef.current?.id === audioOverride.id) {
+        setSelectedJob(resolvedJob);
+      }
       updateToast(
         processToastId,
         resolvedJob.progress_message || (resolvedJob.status === "queued" ? "Queued..." : "Processing audio..."),
@@ -373,9 +382,9 @@ export function App() {
       );
     }
     setJobs(await api(`/api/audio/${audioOverride.id}/jobs`));
-    if (resolvedJob.status === "completed") {
+    if (selectedAudioRef.current?.id === audioOverride.id && resolvedJob.status === "completed") {
       await openJob(resolvedJob);
-    } else {
+    } else if (selectedAudioRef.current?.id === audioOverride.id) {
       setSelectedJob(resolvedJob);
       setSpeakers([]);
       setSentences([]);
@@ -478,6 +487,7 @@ export function App() {
           fileInputRef={fileInputRef}
           filteredAudioItems={filteredAudioItems}
           jobs={jobs}
+          selectedJob={selectedJob}
           onFileInput={handleFileInput}
           onOpenJob={openJob}
           onProcessAudio={processSelectedAudio}

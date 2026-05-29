@@ -170,6 +170,49 @@ def test_prepare_basic_propagates_download_failure(tmp_path, monkeypatch):
         assert response.json()["detail"] == "download failed"
 
 
+def test_vtt_service_renders_sentence_and_speaker_turn_exports():
+    services_module = importlib.import_module("whisperx_ui_backend.services")
+    sentences = [
+        {
+            "speaker_id": "speaker-a",
+            "speaker_display_name": "Alice",
+            "start_time": 0.0,
+            "end_time": 1.5,
+            "current_text": "Hello\nthere.",
+        },
+        {
+            "speaker_id": "speaker-a",
+            "speaker_display_name": "Alice",
+            "start_time": 1.5,
+            "end_time": 3.0,
+            "current_text": "Still Alice.",
+        },
+        {
+            "speaker_id": "speaker-b",
+            "speaker_display_name": "Bob",
+            "start_time": 3.0,
+            "end_time": 4.0,
+            "current_text": "Reply.",
+        },
+    ]
+
+    class FakeTranscriptService:
+        def list_sentences(self, job_id: str) -> list[dict]:
+            assert job_id == "job-1"
+            return sentences
+
+    service = services_module.VttService(FakeTranscriptService())
+
+    sentence_vtt = service.render("job-1", "sentences")
+    assert "00:00:00.000 --> 00:00:01.500\nAlice: Hello there." in sentence_vtt
+    assert "00:00:01.500 --> 00:00:03.000\nAlice: Still Alice." in sentence_vtt
+
+    speaker_turn_vtt = service.render("job-1", "speaker-turns")
+    assert "00:00:00.000 --> 00:00:03.000\nAlice: Hello there. Still Alice." in speaker_turn_vtt
+    assert "00:00:03.000 --> 00:00:04.000\nBob: Reply." in speaker_turn_vtt
+    assert "00:00:01.500 --> 00:00:03.000\nAlice: Still Alice." not in speaker_turn_vtt
+
+
 def test_job_create_uses_phase2_engine_fields(tmp_path, monkeypatch):
     services_module = importlib.import_module("whisperx_ui_backend.services")
 
@@ -416,6 +459,49 @@ def test_zero_config_processing_completes_without_hf_token(tmp_path, monkeypatch
         transcript = client.get(f"/api/jobs/{job['id']}/transcript").json()
         assert transcript[0]["speaker_key"] == "SPEAKER_00"
         assert transcript[0]["speaker_display_name"] == "SPEAKER_00"
+
+
+def test_vtt_export_filename_uses_edited_audio_title_and_job_id(tmp_path, monkeypatch):
+    services_module = importlib.import_module("whisperx_ui_backend.services")
+    monkeypatch.setattr(
+        services_module,
+        "transcribe_with_faster_whisper",
+        lambda **kwargs: {
+            "segments": [
+                {
+                    "start": 0.0,
+                    "end": 1.0,
+                    "text": "Hello team.",
+                    "words": [{"word": "Hello", "start": 0.0, "end": 0.6}],
+                }
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        services_module,
+        "diarize_with_pyannote",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("tokenless path should skip diarization")),
+    )
+
+    with _client(tmp_path, monkeypatch) as client:
+        audio = _upload_audio(client)
+        rename = client.patch(
+            f"/api/audio/{audio['id']}",
+            json={"display_title": "My Edited Transcript / v2"},
+        )
+        assert rename.status_code == 200, rename.text
+
+        response = client.post("/api/jobs", json={"audio_file_id": audio["id"]})
+        assert response.status_code == 200, response.text
+        job = _wait_for_terminal_job(client, response.json()["id"])
+        assert job["status"] == "completed"
+
+        export_response = client.get(f"/api/jobs/{job['id']}/export.vtt?view=sentences")
+        assert export_response.status_code == 200, export_response.text
+        assert (
+            export_response.headers["content-disposition"]
+            == f'attachment; filename="My-Edited-Transcript-v2-{job["id"]}-sentences.vtt"'
+        )
 
 
 def test_job_batch_size_is_passed_to_faster_whisper(tmp_path, monkeypatch):
