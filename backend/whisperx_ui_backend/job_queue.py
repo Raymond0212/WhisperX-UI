@@ -24,6 +24,20 @@ def utc_now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def worker_command(database_path: Path, app_data_dir: Path, job_id: str) -> list[str]:
+    worker_args = [
+        "--database",
+        str(database_path),
+        "--app-data",
+        str(app_data_dir),
+        "--job-id",
+        job_id,
+    ]
+    if getattr(sys, "frozen", False):
+        return [sys.executable, "worker", *worker_args]
+    return [sys.executable, "-m", "whisperx_ui_backend.worker", *worker_args]
+
+
 class JobQueueService:
     def __init__(self, config: AppConfig) -> None:
         self.config = config
@@ -135,17 +149,7 @@ class JobQueueService:
         log_path = log_dir / f"{job_id}.log"
         log_file = log_path.open("a", encoding="utf-8")
         process = subprocess.Popen(
-            [
-                sys.executable,
-                "-m",
-                "whisperx_ui_backend.worker",
-                "--database",
-                str(self.config.database_path),
-                "--app-data",
-                str(self.config.app_data_dir),
-                "--job-id",
-                job_id,
-            ],
+            worker_command(self.config.database_path, self.config.app_data_dir, job_id),
             stdout=log_file,
             stderr=subprocess.STDOUT,
             text=True,

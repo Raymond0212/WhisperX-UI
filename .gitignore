@@ -219,6 +219,7 @@ benchmarks/real-audio/data/
 node_modules/
 frontend/node_modules/
 frontend/dist/
+backend/whisperx_ui_backend/frontend_dist/
 
 # PyPI configuration file
 .pypirc
