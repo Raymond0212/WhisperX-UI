@@ -51,6 +51,48 @@ npm run dev
 
 Set `VITE_API_BASE_URL` when the backend is not running on `http://127.0.0.1:8000`.
 
+## Release builds
+
+Build a local platform-dependent executable bundle:
+
+```bash
+./scripts/build-release.sh
+```
+
+The release bundle is written to:
+
+```text
+dist/whisperx-ui/
+```
+
+Run it:
+
+```bash
+./dist/whisperx-ui/whisperx-ui
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8000
+```
+
+In release mode, the FastAPI backend serves both the `/api/*` routes and the built React frontend. Runtime data is still stored in `app_data/` by default. Override it with:
+
+```bash
+WHISPERX_UI_APP_DATA=/path/to/app-data ./dist/whisperx-ui/whisperx-ui
+```
+
+The GitHub Actions release workflow is manual-only. Repository owners can run **Build release executables** from the Actions tab to produce:
+
+```text
+whisperx-ui-linux-x64.tar.gz
+whisperx-ui-macos-arm64.tar.gz
+whisperx-ui-windows-x64.zip
+```
+
+macOS support is Apple Silicon only and is built on the `macos-14` runner. The configured Torch source marker keeps macOS on the normal Darwin-compatible Torch resolution path instead of the CUDA wheel index.
+
 ## Tests
 
 ```bash
