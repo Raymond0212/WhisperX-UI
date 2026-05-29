@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 from whisperx_ui_backend.config import AppConfig
 from whisperx_ui_backend.database import connect, initialize_database
+from whisperx_ui_backend import job_queue
 from whisperx_ui_backend.job_queue import JobQueueService
 
 
@@ -260,3 +261,25 @@ def test_targeted_termination_holds_capacity_until_worker_exits(tmp_path):
 
     assert "job-active" not in queue._workers
     assert queue.spawned_job_ids == ["job-next"]
+
+
+def test_worker_command_uses_python_module_in_source_runtime(tmp_path, monkeypatch):
+    monkeypatch.setattr(job_queue.sys, "executable", "/python")
+    monkeypatch.delattr(job_queue.sys, "frozen", raising=False)
+
+    command = job_queue.worker_command(tmp_path / "db.sqlite", tmp_path / "app_data", "job-1")
+
+    assert command[:3] == ["/python", "-m", "whisperx_ui_backend.worker"]
+    assert command[-2:] == ["--job-id", "job-1"]
+
+
+def test_worker_command_uses_bundle_worker_dispatch_when_frozen(tmp_path, monkeypatch):
+    monkeypatch.setattr(job_queue.sys, "executable", "/dist/whisperx-ui/whisperx-ui")
+    monkeypatch.setattr(job_queue.sys, "frozen", True, raising=False)
+
+    command = job_queue.worker_command(tmp_path / "db.sqlite", tmp_path / "app_data", "job-1")
+
+    assert command[:2] == ["/dist/whisperx-ui/whisperx-ui", "worker"]
+    assert "-m" not in command
+    assert "whisperx_ui_backend.worker" not in command
+    assert command[-2:] == ["--job-id", "job-1"]

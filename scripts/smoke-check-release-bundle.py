@@ -47,6 +47,20 @@ def main() -> int:
         print(f"[FAIL] Missing release executable: {EXECUTABLE}", file=sys.stderr)
         return 1
 
+    worker_help = subprocess.run(
+        [str(EXECUTABLE), "worker", "--help"],
+        cwd=str(APP_DIR),
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    if worker_help.returncode != 0 or "--job-id" not in worker_help.stdout:
+        print(worker_help.stdout, file=sys.stdout)
+        print(worker_help.stderr, file=sys.stderr)
+        print("[FAIL] Release executable did not expose worker dispatch.", file=sys.stderr)
+        return 1
+
     port = free_port()
     base_url = f"http://127.0.0.1:{port}"
     with tempfile.TemporaryDirectory(prefix="whisperx-ui-release-smoke-") as app_data:
