@@ -1,66 +1,100 @@
 # Architecture
 
-## System Shape
+This document is the top-level architecture map for WhisperX UI. It is intended for rapid codebase comprehension and should point to deeper source-of-truth documents rather than duplicate detailed product, security, reliability, or API rules.
 
-WhisperX UI is a local-first web application with a React frontend and Python backend. The backend runs on the user's machine, stores metadata in SQLite, stores files on the local filesystem, and coordinates faster-whisper transcription, optional Hugging Face pyannote diarization, speaker assignment, speaker samples, and VTT export.
-
-Processing is decoupled from the API process. The FastAPI service remains the API/DB control plane, while model execution runs in supervised worker processes managed by a local SQLite-backed scheduler.
+## 1. Project Structure
 
 ```text
-React Frontend
-    -> Python API Backend
-    -> Application Services
-    -> faster-whisper / Hugging Face pyannote processors
-    -> SQLite + Local File Storage
+WhisperX-UI/
+├── backend/whisperx_ui_backend/  # FastAPI app, services, scheduler, workers, database, and static file serving
+├── frontend/               # React UI source, Vite config, and tests
+├── docs/                   # Design docs, product specs, security and reliability details, generated schema
+├── scripts/                # Development, smoke, schema, and release helper scripts
+├── tests/                  # Backend, queue, retention, static file, and docs tests
+└── .github/workflows/      # GitHub Actions release workflow
 ```
 
-The app is initially accessed through `http://localhost:<port>`. The architecture should remain compatible with a future Electron package that launches the same React UI and bundled Python backend.
+## 2. High-Level System Diagram
 
-## Major Subsystems
+```text
+User Browser
+  <-> React Frontend
+      <-> FastAPI API Process
+          -> Application Services
+          -> SQLite database
+          -> Local filesystem app_data/
+          -> JobQueueService scheduler
+              -> worker process
+                  -> faster-whisper processor
+                  -> optional pyannote diarization
+                  -> speaker assignment and transcript persistence
 
-### Frontend
+External network use is limited to explicit model/token-dependent flows such as
+Hugging Face model downloads and pyannote access.
+```
 
-The frontend owns browser interaction:
+In development, Vite serves the React UI and the browser calls the local FastAPI backend. In release mode, the bundled backend serves both `/api/*` routes and the built React frontend from one local process.
 
-- audio upload and title editing
-- model configuration controls
-- library, upload, processing, transcript, and settings screens
-- audio playback and timestamp seeking
-- sentence-level transcript editing
-- speaker sample playback and speaker renaming
-- VTT export initiation
+## 3. Core Components
 
-The frontend should call backend APIs rather than reading local files or SQLite directly.
+### React Frontend
 
-### Backend API
+The frontend owns browser interaction: upload, library navigation, settings, processing controls, audio playback, transcript review, speaker renaming, and VTT export initiation. It communicates through backend HTTP APIs and does not read SQLite or local filesystem paths directly.
 
-The backend exposes local HTTP APIs for:
+Detailed frontend behavior and test coverage live in [docs/FRONTEND.md](docs/FRONTEND.md).
 
-- audio upload, metadata, streaming, title editing, and soft deletion
-- transcription job creation and status retrieval
-- sentence transcript retrieval and editing
-- speaker retrieval and renaming
-- settings retrieval and updates
-- VTT export
+### FastAPI API Process
 
-The API layer should validate requests, map HTTP behavior to service calls, and avoid embedding inference orchestration directly in route handlers.
+`backend/whisperx_ui_backend/app.py` is the local HTTP control plane. Its lifespan startup loads runtime config, initializes SQLite, runs deleted-audio purge, starts the scheduler, and stores shared state for route dependencies. Shutdown stops the retention task, scheduler, and SQLite connection.
+
+The API routes own request/response boundaries and delegate domain work to services. They cover audio, jobs, models, transcript sentences, speakers, settings, stored Hugging Face token writes, VTT export, health, and bundled frontend serving.
 
 ### Application Services
 
-Services hold reusable domain behavior:
+`services.py` contains the main domain services for audio storage, job creation, model preparation, transcript and speaker persistence, settings, secrets, and VTT rendering. Processor-specific behavior is kept behind service/processor boundaries so UI and API contracts do not depend on faster-whisper or pyannote internals.
 
-- storage service for local file placement, duplicate filename handling, and stream paths
-- transcription service for faster-whisper orchestration
-- diarization service for Hugging Face pyannote speaker labeling when a token is supplied
-- sentence chunking service for canonical sentence segments
-- speaker sample service for selecting useful sample timestamp ranges
-- VTT service for export formatting
+Detailed data model and API contract guidance lives in [docs/design-docs/data-model-and-api-contract.md](docs/design-docs/data-model-and-api-contract.md).
 
-### Persistence
+### Scheduler And Workers
 
-SQLite is the metadata store. Local filesystem storage keeps uploaded audio and generated artifacts.
+`JobQueueService` keeps model execution out of the API process. The API creates queued jobs in SQLite, then the scheduler starts supervised workers up to configured capacity. Worker metadata and heartbeat fields are persisted on job rows so crashes, termination, and stale processing states can be reconciled.
 
-Recommended local data layout:
+In source development, workers run as `python -m whisperx_ui_backend.worker`. In the PyInstaller bundle, the main executable spawns the internal `whisperx-ui worker` command. That command is implementation-only and should not be treated as a user-facing interface.
+
+Reliability details for status transitions, heartbeats, deletion, retention, and smoke validation live in [docs/RELIABILITY.md](docs/RELIABILITY.md).
+
+### Processing Adapters
+
+Processing uses faster-whisper for transcription and optional Hugging Face pyannote diarization when a transient or saved encrypted token is available. Speaker assignment, sentence chunking, sample timestamp selection, and transcript persistence convert processor output into repository data contracts.
+
+Product-level processing expectations live in [docs/product-specs/whisperx-web-ui.md](docs/product-specs/whisperx-web-ui.md).
+
+### Bundled Static Serving
+
+`static_files.py` locates the built React frontend in source or PyInstaller layouts. When frontend assets are present, FastAPI mounts `/assets`, serves `/`, and falls back to `index.html` for non-API frontend routes. Unknown `/api/*` paths remain API errors rather than SPA fallbacks.
+
+Release packaging details live in [docs/design-docs/release-packaging.md](docs/design-docs/release-packaging.md).
+
+## 4. Data Stores
+
+### SQLite
+
+SQLite is the metadata store. `database.py` enables foreign keys, WAL journal mode, and a busy timeout, then initializes or updates the app-managed schema on startup.
+
+Important tables include:
+
+- `audio_files`
+- `transcription_jobs`
+- `speakers`
+- `transcript_sentences`
+- `app_settings`
+- `provider_credentials`
+
+Generated schema reference lives in [docs/generated/db-schema.md](docs/generated/db-schema.md).
+
+### Local Filesystem
+
+Runtime data lives under `WHISPERX_UI_APP_DATA`, defaulting to `app_data/` relative to the launch directory:
 
 ```text
 app_data/
@@ -69,27 +103,26 @@ app_data/
   exports/
   logs/
   models/
+  .secrets.key
 ```
 
-SQLite stores metadata, settings, job state, transcript sentences, speaker records, and optional credentials. Audio binaries should remain on disk and be referenced by database records.
+The filesystem stores uploaded audio, generated/exported artifacts, job logs, downloaded model snapshots, and local secret key material. Database rows reference local files rather than embedding audio bytes.
 
-## Dependency Direction
+## 5. External Integrations
 
-Dependencies should flow inward:
+- Browser: user interface for the local web app.
+- Hugging Face Hub: model downloads and gated pyannote access when a token is supplied or saved.
+- faster-whisper: local transcription runtime.
+- pyannote.audio: optional diarization runtime.
+- PyInstaller: platform-specific executable packaging.
+- GitHub Actions: manual release artifact builds. There is no GitLab CI release configuration in the current repository.
 
-- UI depends on API contracts.
-- API routes depend on services.
-- Services depend on repositories, storage adapters, and processor interfaces.
-- Processor implementations depend on faster-whisper, pyannote, Hugging Face Hub, and local runtime libraries.
-- Persistence adapters depend on SQLite and filesystem APIs.
+## 6. Glossary
 
-Processor-specific code should not leak into UI components or database models except through explicit engine/model setting fields.
-
-## Core Constraints
-
-- Local faster-whisper transcription is the default path; Hugging Face pyannote diarization is enabled by a transient request token or saved encrypted Hugging Face token, and the no-token path falls back to `SPEAKER_00`.
-- The canonical transcript unit is a sentence with stable ID, timestamps, speaker ID, original text, and current text.
-- Speaker display names are user-editable, but internal diarization labels remain stable.
-- Original transcription output is preserved even when current transcript text changes.
-- Speaker-turn transcript chunks are display-only aggregations over adjacent sentence records.
-- Audio deletion is recoverable during the 30-day retention window: normal views hide soft-deleted rows immediately, and the backend purges expired deleted rows and uploaded audio bytes on startup and daily at local midnight.
+- API process: The FastAPI server that handles HTTP routes, SQLite control-plane work, scheduler lifecycle, and frontend serving.
+- App data: The local directory containing SQLite, uploads, exports, logs, models, and secret key material.
+- Diarization: Assigning speaker labels to audio time ranges.
+- Processor: Adapter code that invokes transcription, diarization, speaker assignment, or related model runtime behavior.
+- Scheduler: The local `JobQueueService` that starts and supervises worker processes.
+- Sentence: The canonical persisted transcript unit.
+- Worker: A child process that runs one transcription job outside the API process.

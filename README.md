@@ -97,6 +97,36 @@ http://127.0.0.1:8000
 
 Windows release bundles are currently produced by GitHub Actions only.
 
+## Binary Configuration
+
+The built `whisperx-ui` binary is configured with environment variables.
+
+| Variable                           | Default     | Description                                                                                                                                                                                   |
+| ---------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WHISPERX_UI_HOST`                 | `127.0.0.1` | Host address for the bundled local server. Keep the default for local-only use.                                                                                                               |
+| `WHISPERX_UI_PORT`                 | `8000`      | Port for the bundled local server. Change this if another app is already using port `8000`.                                                                                                   |
+| `WHISPERX_UI_APP_DATA`             | `app_data`  | Directory for SQLite, uploads, exports, logs, downloaded models, and encrypted local credentials. Relative paths resolve from the directory where the binary is launched.                     |
+| `WHISPERX_UI_DEBUG`                | off         | Enables verbose backend logging when set to `1`, `true`, `yes`, `on`, or `debug`.                                                                                                             |
+| `WHISPERX_UI_INLINE_JOB_EXECUTION` | off         | Runs transcription jobs inside the server process when set to `1`, `true`, or `yes`. This is mainly for diagnostics; normal binary use should leave it unset so jobs run in worker processes. |
+
+macOS/Linux example:
+
+```bash
+WHISPERX_UI_PORT=8010 WHISPERX_UI_APP_DATA=/path/to/app-data ./whisperx-ui
+```
+
+Windows PowerShell example:
+
+```powershell
+$env:WHISPERX_UI_PORT="8010"
+$env:WHISPERX_UI_APP_DATA="C:\path\to\app-data"
+.\whisperx-ui.exe
+```
+
+After changing `WHISPERX_UI_HOST` or `WHISPERX_UI_PORT`, open the matching address in your browser.
+
+The binary also contains an internal `whisperx-ui worker` command to spawn transcription and diarization worker nodes. The main executable spawns it automatically for transcription jobs; do not run it manually.
+
 ## Contributing
 
 Developer setup, test commands, and validation workflows are documented in [CONTRIBUTE.md](CONTRIBUTE.md).

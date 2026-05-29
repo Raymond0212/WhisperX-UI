@@ -226,16 +226,16 @@ failed
 deleted
 ```
 
-| ID     | Requirement                                                   |
-| ------ | ------------------------------------------------------------- |
-| JS-001 | A job is queued when the user clicks process.                 |
-| JS-002 | A job stores its current status.                              |
-| JS-003 | Successful jobs save transcript and speakers.                 |
-| JS-004 | Failed jobs save error details.                               |
-| JS-005 | User can view failed job status.                              |
-| JS-006 | User can see approximate staged progress while polling a job. |
-| JS-007 | While the selected job is queued or processing, the primary process action becomes Stop. |
-| JS-008 | Stopping a job deletes only that job and terminates only its active worker, if one exists. |
+| ID     | Requirement                                                                                      |
+| ------ | ------------------------------------------------------------------------------------------------ |
+| JS-001 | A job is queued when the user clicks process.                                                    |
+| JS-002 | A job stores its current status.                                                                 |
+| JS-003 | Successful jobs save transcript and speakers.                                                    |
+| JS-004 | Failed jobs save error details.                                                                  |
+| JS-005 | User can view failed job status.                                                                 |
+| JS-006 | User can see approximate staged progress while polling a job.                                    |
+| JS-007 | While the selected job is queued or processing, the primary process action becomes Stop.         |
+| JS-008 | Stopping a job deletes only that job and terminates only its active worker, if one exists.       |
 | JS-009 | Queue capacity for a stopped processing job is released only after that worker has fully exited. |
 
 Progress is approximate and stage-weighted through fields such as `progress_stage`, `progress_percent`, and `progress_message`. It must not be presented as exact real-time model inference progress.
@@ -317,4 +317,4 @@ Recommended stored filename format:
 - Transcript format: VTT-style sentence chunks.
 - Speaker labels: globally editable display names.
 - Playback: timestamped sentence and speaker sample playback.
-- Packaging target: Electron later.
+- Packaging target: Python server with React frontend, suitable for future Electron packaging.
