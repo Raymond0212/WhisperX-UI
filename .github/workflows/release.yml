@@ -1,0 +1,123 @@
+name: Build release executables
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.artifact }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: whisperx-ui-linux-x64
+          - os: macos-14
+            artifact: whisperx-ui-macos-arm64
+          - os: windows-latest
+            artifact: whisperx-ui-windows-x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Sync backend dependencies
+        run: uv sync --extra build
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Copy frontend into backend package
+        shell: bash
+        run: |
+          rm -rf backend/whisperx_ui_backend/frontend_dist
+          mkdir -p backend/whisperx_ui_backend/frontend_dist
+          cp -R frontend/dist/. backend/whisperx_ui_backend/frontend_dist/
+
+      - name: Build executable on Linux or macOS
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          uv run pyinstaller \
+            --noconfirm \
+            --clean \
+            --name whisperx-ui \
+            --collect-all faster_whisper \
+            --collect-all pyannote.audio \
+            --collect-all pyannote.core \
+            --collect-all pyannote.database \
+            --collect-all pyannote.metrics \
+            --collect-all torch \
+            --collect-all torchaudio \
+            --collect-all transformers \
+            --collect-all huggingface_hub \
+            --add-data "backend/whisperx_ui_backend/frontend_dist:whisperx_ui_backend/frontend_dist" \
+            --paths backend \
+            backend/whisperx_ui_backend/__main__.py
+
+      - name: Build executable on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          uv run pyinstaller `
+            --noconfirm `
+            --clean `
+            --name whisperx-ui `
+            --collect-all faster_whisper `
+            --collect-all pyannote.audio `
+            --collect-all pyannote.core `
+            --collect-all pyannote.database `
+            --collect-all pyannote.metrics `
+            --collect-all torch `
+            --collect-all torchaudio `
+            --collect-all transformers `
+            --collect-all huggingface_hub `
+            --add-data "backend/whisperx_ui_backend/frontend_dist;whisperx_ui_backend/frontend_dist" `
+            --paths backend `
+            backend/whisperx_ui_backend/__main__.py
+
+      - name: Package Unix artifact
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          cd dist
+          tar -czf "${{ matrix.artifact }}.tar.gz" whisperx-ui
+
+      - name: Package Windows artifact
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist\whisperx-ui -DestinationPath "${{ matrix.artifact }}.zip"
+
+      - name: Upload Unix artifact
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}.tar.gz
+
+      - name: Upload Windows artifact
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.zip
