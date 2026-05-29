@@ -242,11 +242,13 @@ Progress is approximate and stage-weighted through fields such as `progress_stag
 | ID      | Requirement                                              |
 | ------- | -------------------------------------------------------- |
 | VTT-001 | Transcript is sentence-chunked in VTT-compatible format. |
-| VTT-002 | Each VTT cue represents one sentence.                    |
-| VTT-003 | Each cue includes start and end timestamps.              |
-| VTT-004 | Each cue uses current edited transcript text.            |
-| VTT-005 | Each cue uses current speaker display name.              |
-| VTT-006 | User can export transcript as `.vtt`.                    |
+| VTT-002 | Sentence VTT export uses one cue per sentence.           |
+| VTT-003 | Speaker-turn VTT export groups adjacent sentences with the same speaker into one cue. |
+| VTT-004 | Each cue includes start and end timestamps.              |
+| VTT-005 | Each cue uses current edited transcript text.            |
+| VTT-006 | Each cue uses current speaker display name.              |
+| VTT-007 | User can export transcript as `.vtt`.                    |
+| VTT-008 | Export action asks the user to confirm the sentence-based or speaker-turn-based download. |
 
 Example:
 

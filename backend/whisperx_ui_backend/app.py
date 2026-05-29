@@ -242,13 +242,21 @@ def update_speaker(
 
 
 @app.get("/api/jobs/{job_id}/export.vtt")
-def export_vtt(job_id: str, service: TranscriptService = Depends(transcript_service)):
+def export_vtt(
+    job_id: str,
+    view: str = "sentences",
+    service: TranscriptService = Depends(transcript_service),
+):
     if not service.list_sentences(job_id):
         raise HTTPException(status_code=404, detail="Transcript not found")
+    filename_suffix = "speaker-turns" if view == "speaker-turns" else "sentences"
+    filename_prefix = service.export_filename_prefix(job_id)
     return PlainTextResponse(
-        VttService(service).render(job_id),
+        VttService(service).render(job_id, view),
         media_type="text/vtt",
-        headers={"Content-Disposition": f'attachment; filename="{job_id}.vtt"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename_prefix}-{filename_suffix}.vtt"'
+        },
     )
 
 

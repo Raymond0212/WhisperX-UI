@@ -25,6 +25,13 @@ export function TranscriptReview({
     : null;
   const progressLabel = job.progress_message || (job.status === "queued" ? "Queued" : "Processing audio");
   const deviceIndicator = runtimeDeviceIndicator(job);
+  const exportView = viewMode === "sentences" ? "sentences" : "speaker-turns";
+  const exportLabel = viewMode === "sentences" ? "Download Sentence VTT" : "Download Speaker Turn VTT";
+  const exportConfirmation =
+    viewMode === "sentences"
+      ? "Download the sentence based VTT export?"
+      : "Download the speaker turn based VTT export?";
+  const exportUrl = `${API_BASE}/api/jobs/${job.id}/export.vtt?view=${exportView}`;
   return (
     <div className="review">
       <section className={`speaker-panel ${isSpeakerPanelOpen ? "open" : ""}`}>
@@ -67,16 +74,19 @@ export function TranscriptReview({
         <button
           type="button"
           className="export-link"
-          aria-label="Export VTT"
+          aria-label={exportLabel}
           disabled={!isCompleted}
-          data-export-url={`${API_BASE}/api/jobs/${job.id}/export.vtt`}
+          data-export-url={exportUrl}
+          data-export-view={exportView}
           onClick={() => {
             if (!isCompleted) return;
-            window.location.assign(`${API_BASE}/api/jobs/${job.id}/export.vtt`);
+            if (window.confirm(exportConfirmation)) {
+              window.location.assign(exportUrl);
+            }
           }}
         >
           <Download size={16} />
-          {!isMobile && "Export VTT"}
+          {!isMobile && exportLabel}
         </button>
       </div>
 

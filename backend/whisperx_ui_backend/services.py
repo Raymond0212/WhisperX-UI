@@ -1318,6 +1318,22 @@ class TranscriptService:
     def __init__(self, connection: sqlite3.Connection) -> None:
         self.connection = connection
 
+    def export_filename_prefix(self, job_id: str) -> str:
+        row = self.connection.execute(
+            """
+            SELECT a.display_title
+            FROM transcription_jobs j
+            JOIN audio_files a ON a.id = j.audio_file_id
+            WHERE j.id = ?
+            """,
+            (job_id,),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Transcript not found")
+        display_title = str(row["display_title"] or "").strip()
+        safe_title = re.sub(r"[^A-Za-z0-9._-]+", "-", display_title).strip(".-_") or "transcript"
+        return f"{safe_title}-{job_id}"
+
     def list_sentences(self, job_id: str) -> list[dict[str, Any]]:
         rows = self.connection.execute(
             """
@@ -1567,16 +1583,64 @@ class VttService:
     def __init__(self, transcript_service: TranscriptService) -> None:
         self.transcript_service = transcript_service
 
-    def render(self, job_id: str) -> str:
+    def render(self, job_id: str, view: str = "sentences") -> str:
+        sentences = self.transcript_service.list_sentences(job_id)
+        if view == "sentences":
+            return self._render_sentences(sentences)
+        if view == "speaker-turns":
+            return self._render_speaker_turns(sentences)
+        raise HTTPException(status_code=400, detail="Unsupported VTT export view")
+
+    def _render_sentences(self, sentences: list[dict[str, Any]]) -> str:
         cues = ["WEBVTT", ""]
-        for sentence in self.transcript_service.list_sentences(job_id):
-            start = format_vtt_time(sentence["start_time"])
-            end = format_vtt_time(sentence["end_time"])
-            cues.append(f"{start} --> {end}")
-            text = sentence["current_text"].replace("\n", " ").strip()
-            cues.append(f"{sentence['speaker_display_name']}: {text}")
+        for sentence in sentences:
+            cues.extend(
+                self._cue(
+                    sentence["start_time"],
+                    sentence["end_time"],
+                    sentence["speaker_display_name"],
+                    sentence["current_text"],
+                )
+            )
             cues.append("")
         return "\n".join(cues)
+
+    def _render_speaker_turns(self, sentences: list[dict[str, Any]]) -> str:
+        cues = ["WEBVTT", ""]
+        for turn in self._group_speaker_turns(sentences):
+            text = " ".join(
+                sentence["current_text"].replace("\n", " ").strip()
+                for sentence in turn["sentences"]
+            ).strip()
+            cues.extend(self._cue(turn["start_time"], turn["end_time"], turn["speaker_display_name"], text))
+            cues.append("")
+        return "\n".join(cues)
+
+    def _group_speaker_turns(self, sentences: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        turns: list[dict[str, Any]] = []
+        for sentence in sentences:
+            last = turns[-1] if turns else None
+            if last is not None and last["speaker_id"] == sentence["speaker_id"]:
+                last["sentences"].append(sentence)
+                last["end_time"] = sentence["end_time"]
+                last["speaker_display_name"] = sentence["speaker_display_name"]
+                continue
+            turns.append(
+                {
+                    "speaker_id": sentence["speaker_id"],
+                    "speaker_display_name": sentence["speaker_display_name"],
+                    "start_time": sentence["start_time"],
+                    "end_time": sentence["end_time"],
+                    "sentences": [sentence],
+                }
+            )
+        return turns
+
+    def _cue(self, start_time: float, end_time: float, speaker_name: str, text: str) -> list[str]:
+        start = format_vtt_time(start_time)
+        end = format_vtt_time(end_time)
+        clean_text = text.replace("\n", " ").strip()
+        return [f"{start} --> {end}", f"{speaker_name}: {clean_text}"]
 
 
 def format_vtt_time(seconds: float) -> str:

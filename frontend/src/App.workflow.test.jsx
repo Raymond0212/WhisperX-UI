@@ -274,7 +274,7 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   vi.stubGlobal("fetch", fetchMock);
   const play = vi.spyOn(window.HTMLMediaElement.prototype, "play").mockImplementation(() => {});
   const pause = vi.spyOn(window.HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
-  vi.spyOn(window, "confirm").mockReturnValue(true);
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
 
   render(<App />);
 
@@ -305,7 +305,7 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   fireEvent.click(screen.getByRole("button", { name: /close settings/i }));
   fireEvent.click(screen.getByRole("button", { name: /^process$/i }));
 
-  expect(await screen.findByRole("progressbar")).not.toBeNull();
+  expect(await screen.findByLabelText("Transcription progress")).not.toBeNull();
   await screen.findByText("Processing complete.");
   const modelRequest = requests.find(
     (request) => request.method === "POST" && request.path === "/api/models/prepare-basic",
@@ -328,9 +328,14 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   expect(screen.getByText(/Local model ready/)).not.toBeNull();
 
   expect(await screen.findByText("Hello world.")).not.toBeNull();
-  expect(screen.getByRole("button", { name: /export vtt/i }).dataset.exportUrl).toBe(
-    `${API_BASE}/api/jobs/job-complete/export.vtt`,
+  const sentenceExport = screen.getByRole("button", { name: /download sentence vtt/i });
+  expect(sentenceExport.dataset.exportUrl).toBe(
+    `${API_BASE}/api/jobs/job-complete/export.vtt?view=sentences`,
   );
+  expect(sentenceExport.dataset.exportView).toBe("sentences");
+  confirm.mockReturnValueOnce(false);
+  fireEvent.click(sentenceExport);
+  expect(confirm).toHaveBeenCalledWith("Download the sentence based VTT export?");
   fireEvent.click(screen.getByRole("button", { name: /speaker settings/i }));
   const player = document.querySelector("audio");
   fireEvent.click(screen.getByRole("button", { name: /play sample for speaker_00/i }));
@@ -369,6 +374,14 @@ test("drives the MVP upload, process, review, edit, export, failed job, and dele
   });
 
   fireEvent.click(screen.getByRole("button", { name: /speaker turns/i }));
+  const turnExport = screen.getByRole("button", { name: /download speaker turn vtt/i });
+  expect(turnExport.dataset.exportUrl).toBe(
+    `${API_BASE}/api/jobs/job-complete/export.vtt?view=speaker-turns`,
+  );
+  expect(turnExport.dataset.exportView).toBe("speaker-turns");
+  confirm.mockReturnValueOnce(false);
+  fireEvent.click(turnExport);
+  expect(confirm).toHaveBeenCalledWith("Download the speaker turn based VTT export?");
   await screen.findByRole("button", { name: /edit sentence sentence-1/i });
   fireEvent.click(screen.getByRole("button", { name: /edit sentence sentence-1/i }));
   const turnSentenceText = screen.getByRole("textbox", { name: /transcript sentence sentence-1/i });

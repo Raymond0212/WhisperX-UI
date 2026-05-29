@@ -1,7 +1,6 @@
 import React from "react";
 import { ChevronDown, Download, Pause, Play, RotateCcw, Volume2, Trash2 } from "lucide-react";
 import { API_BASE } from "../api.js";
-import { runtimeDeviceIndicator } from "../jobUtils.js";
 import { TranscriptReview } from "./TranscriptReview.jsx";
 
 export function WorkspacePanel({
@@ -119,12 +118,7 @@ export function WorkspacePanel({
             </div>
           </div>
 
-          {selectedJob && (
-            <>
-              <p className="active-model-subtitle">{selectedJob.transcription_model}</p>
-              <JobProgress job={selectedJob} />
-            </>
-          )}
+          {selectedJob && <p className="active-model-subtitle">{selectedJob.transcription_model}</p>}
 
           <CustomAudioPlayer audioRef={audioRef} src={`${API_BASE}/api/audio/${selectedAudio.id}/stream`} />
           {!selectedJob && (
@@ -159,33 +153,6 @@ export function WorkspacePanel({
         </div>
       )}
     </section>
-  );
-}
-
-function JobProgress({ job }) {
-  const isActive = job?.status === "queued" || job?.status === "processing";
-  if (!isActive) return null;
-  const rawValue = Number(job.progress_percent);
-  const value = Number.isFinite(rawValue) ? Math.max(0, Math.min(100, rawValue)) : 0;
-  const label = job.progress_message || (job.status === "queued" ? "Queued" : "Processing");
-  const deviceIndicator = runtimeDeviceIndicator(job);
-  return (
-    <div className="job-progress" aria-live="polite">
-      <div
-        className="job-progress__rail"
-        role="progressbar"
-        aria-label={label}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(value)}
-      >
-        <span className="job-progress__fill" style={{ width: `${value}%` }} />
-      </div>
-      <p className="job-progress__label">
-        <span>{label}</span>
-        {deviceIndicator && <span className="runtime-device-pill">{deviceIndicator}</span>}
-      </p>
-    </div>
   );
 }
 
