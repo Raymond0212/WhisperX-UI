@@ -1,5 +1,7 @@
 # Repository Knowledge Policy
 
+This file should NOT be edited without explicit human review and approval.
+
 ## Purpose
 
 This policy defines how repository knowledge must be structured, maintained, and used so that both humans and agents can navigate the codebase effectively. The goal is to keep repository knowledge discoverable, current, verifiable, and aligned with real system behavior.
@@ -285,36 +287,104 @@ Generated documentation must be stored separately from authored documentation an
 
 ---
 
-# Agent Usage Expectations
+# Agent Rules
 
-Agents operating in the repository should follow this navigation model:
+These rules apply to agents working in this repository. Keep this file concise and enforceable.
 
-1. Start with `AGENTS.md` for orientation.
-2. Use `ARCHITECTURE.md` for top-level system structure.
-3. Consult the relevant section of `docs/` depending on the task:
-   - design reasoning in `design-docs/`;
-   - implementation plans in `exec-plans/`;
-   - product intent in `product-specs/`;
-   - reference material in `references/`;
-   - domain standards in `SECURITY.md`, `RELIABILITY.md`, `FRONTEND.md`, and similar files.
+## 1. Load context selectively
 
-4. Prefer source-of-truth files over inferred assumptions.
-5. Treat missing, empty, or stale files as signals that knowledge may need verification rather than blind trust.
+Agents must not consume the entire repository knowledge base by default.
 
----
+Use this order:
 
-# Repository Standard Summary
+1. Read `AGENTS.md`.
+2. Inspect the files directly involved in the task.
+3. Search for exact symbols, paths, tests, or errors.
+4. Open deeper documentation only when it is clearly relevant.
 
-This repository uses the following documentation model:
+Do not read broad design, product, or planning docs unless the task depends on them.
 
-- `AGENTS.md` is the concise navigation layer.
-- `ARCHITECTURE.md` is the top-level system map.
-- `docs/` is the structured system of record.
-- `design-docs/` captures technical reasoning.
-- `product-specs/` captures intended product behavior.
-- `exec-plans/` captures execution history and current work planning.
-- `generated/` stores machine-derived reference artifacts.
-- `references/` stores curated supporting references.
-- Thematic documents such as `SECURITY.md` and `RELIABILITY.md` define reusable guardrails.
+## 2. Follow existing behavior first
 
-This structure must remain intentional, maintainable, and aligned with the real project. Files or folders that are absent, empty, irrelevant, or stale may be removed rather than retained as decorative structure.
+Before changing code, identify the existing local pattern.
+
+Prefer repository conventions over generic best practices when they conflict, unless the convention is unsafe or the task explicitly asks for a change.
+
+## 3. Keep changes narrow
+
+A change should solve the requested problem with the smallest reasonable diff.
+
+Avoid opportunistic rewrites, mass formatting, renames, dependency changes, or architecture changes unless they are required for the task.
+
+## 4. Preserve architecture boundaries
+
+Respect domain boundaries, dependency direction, layering, and ownership conventions.
+
+If architecture rules are documented or enforced by tests or linters, treat them as mandatory. If they are unclear, infer from nearby code and keep the change local.
+
+## 5. Validate with relevant checks
+
+Run the narrowest useful validation for the change.
+
+Examples:
+
+- changed one function: run its unit tests if available;
+- changed a route or component: run related tests and type checks if available;
+- changed schema or generated output: run generation or migration checks;
+- changed documentation only: verify links, filenames, and line count.
+
+Report any validation that could not be run.
+
+## 6. Prefer executable rules over prose
+
+When the same rule causes repeated review comments or bugs, prefer encoding it into tooling.
+
+Use tests, linters, scripts, CI checks, or generated references when practical.
+
+Documentation should explain durable rules. Tooling should enforce recurring invariants.
+
+## 7. Capture durable knowledge
+
+Update repository documentation when a task creates or changes durable knowledge, such as:
+
+- architectural decisions;
+- product behavior;
+- setup or deployment steps;
+- recurring implementation patterns;
+- debugging or operational procedures;
+- known technical debt.
+
+Do not document transient observations that will not help future work.
+
+## 8. Keep Markdown small
+
+Markdown files must not exceed **500 lines**.
+
+Aim for **about 200 lines** per file. Split by concern when a file grows.
+
+Use links instead of copying the same rule into multiple files.
+
+## 9. Escalate ambiguous judgment
+
+Escalate or clearly flag uncertainty when a task requires unresolved judgment about:
+
+- product direction;
+- security risk;
+- privacy or compliance;
+- foundational architecture;
+- ownership boundaries;
+- destructive migrations;
+- behavior that cannot be validated locally.
+
+Do not hide unresolved tradeoffs behind implementation details.
+
+## 10. Report honestly
+
+Final responses must distinguish completed work from unvalidated assumptions.
+
+Include:
+
+- changed files or areas;
+- validation performed;
+- validation not performed;
+- follow-up risks, if any.

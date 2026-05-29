@@ -1,5 +1,7 @@
 # WhisperX UI Repository Guide
 
+Change of this file requires explicit approval from a human maintainer. Follow the conventions and rules outlined in this file to ensure consistency and maintainability of the repository. When in doubt, consult the relevant documentation or ask for clarification before making changes.
+
 ## Overview
 
 WhisperX UI is a single-user, local-first desktop-style web application for uploading audio, running faster-whisper transcription and optional Hugging Face pyannote diarization, reviewing sentence-level transcripts, editing text, renaming speakers, playing timestamped audio, and exporting VTT.
@@ -36,3 +38,41 @@ The implementation target is:
 ## Project Initialization
 
 Always load environment variables from the `.env` file before running any agent or script. This file may contain sensitive information and should not be shared. The `.env` file is included in `.gitignore` to prevent accidental commits of sensitive data.
+
+## Operating model
+
+1. Use repository-local knowledge before guessing.
+2. Prefer small, targeted changes over broad rewrites.
+3. Preserve existing architecture, style, and conventions unless the task explicitly changes them.
+4. Validate behavior with the narrowest relevant checks before reporting completion.
+5. Update documentation only when the change creates or invalidates durable repository knowledge.
+
+## Documentation size rule
+
+Markdown files must stay small enough for humans and agents to use.
+
+- Hard limit: **500 lines per Markdown file**.
+- Target size: **about 200 lines**.
+- Split files by concern before they become long.
+- Use indexes and links instead of duplicating content.
+
+## Repository knowledge map
+
+Use these files only when relevant:
+
+- `docs/REPOSITORY-KNOWLEDGE-POLICY.md` — repository documentation rules and conventions.
+- `docs/CODE-DEV-REVIEW-ORCHESTRATION.md` — multi-agent orchestration workflow and conventions.
+
+If a listed file or folder does not exist, do not assume it is required. Create it only when the current task needs it.
+
+## Completion standard
+
+Before declaring work complete, agents should be able to state:
+
+- what changed;
+- why it changed;
+- what validation was run;
+- what was not validated;
+- whether documentation or tests need follow-up.
+
+Do not claim validation that was not performed.
