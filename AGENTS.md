@@ -16,7 +16,7 @@ The implementation target is:
 - [ARCHITECTURE.md](ARCHITECTURE.md): top-level system architecture, subsystem boundaries, and dependency direction.
 - [docs/product-specs/index.md](docs/product-specs/index.md): product behavior requirements.
 - [docs/design-docs/index.md](docs/design-docs/index.md): design decisions, rationale, and implementation constraints.
-- [docs/ORCHISTRATION.md](docs/ORCHISTRATION.md): orchestration workflow for multi-agent implementation cycles.
+- [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md): orchestration workflow for multi-agent implementation cycles.
 - [docs/generated/db-schema.md](docs/generated/db-schema.md): code-derived SQLite schema reference.
 - [docs/FRONTEND.md](docs/FRONTEND.md): frontend conventions and interaction expectations.
 - [docs/SECURITY.md](docs/SECURITY.md): local-first security and credential handling guidance.
