@@ -8,7 +8,7 @@ WhisperX UI is a single-user, local-first desktop-style web application for uplo
 
 The implementation target is:
 
-- React browser UI, compatible with future Electron packaging
+- React browser UI
 - Python local API backend
 - SQLite persistence
 - Local filesystem storage for uploads, exports, logs, and models

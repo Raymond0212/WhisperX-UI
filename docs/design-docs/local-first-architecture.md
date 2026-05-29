@@ -54,7 +54,3 @@ Processor-specific implementations should sit behind service boundaries so engin
 ## Speaker Samples
 
 Speaker samples should use the uploaded audio source and timestamp ranges when possible. The system should store `sample_start` and `sample_end` for each speaker rather than generating separate clip files. When selecting from sentence ranges, it should pick the longest sample sentence by default.
-
-## Electron Compatibility
-
-Avoid assumptions that only work in a hosted SaaS environment. The frontend should communicate through local HTTP APIs and should not require browser access to arbitrary local file paths. Future Electron work can add backend process lifecycle management and OS keychain credential storage.

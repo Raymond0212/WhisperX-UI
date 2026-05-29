@@ -16,7 +16,6 @@ WhisperX UI is a single-user local application. The default threat model is loca
 - API keys and tokens must not be logged.
 - API keys and tokens should not be returned in plaintext API responses.
 - Hugging Face token persistence is implemented through encrypted local SQLite storage.
-- Electron packaging should later prefer OS keychain storage.
 
 Current implementation strips `online_api_keys` and most key names containing `api_key`, `token`, or `secret` before persisting app settings or job settings. Exact job setting keys named `diarization_token` or `hf_token` are currently preserved in `settings_json` and may be returned in job responses through the `settings` payload. Prefer the stored-token endpoint for normal UI flows, and treat full redaction of transient job tokens as open security debt.
 
