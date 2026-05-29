@@ -1,4 +1,11 @@
-export const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+const configuredApiBase = import.meta.env.VITE_API_BASE_URL;
+
+export const API_BASE =
+  configuredApiBase === undefined
+    ? import.meta.env.DEV
+      ? "http://127.0.0.1:8000"
+      : ""
+    : configuredApiBase;
 
 export async function api(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, options);
