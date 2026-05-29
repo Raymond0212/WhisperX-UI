@@ -1,12 +1,29 @@
 # WhisperX UI
 
-Local-first app for uploading audio, downloading faster-whisper models, running local transcription + Hugging Face pyannote diarization, editing sentence-level transcripts, renaming speakers, and exporting VTT.
+WhisperX UI is a local-first app for transcribing audio, reviewing sentence-level transcripts, renaming speakers, playing timestamped audio, and exporting VTT captions.
 
-The backend supports upload, library listing, metadata fetch, title editing, soft deletion with 30-day purge, browser audio streaming, model preparation, job creation, transcript sentence edits, speaker renaming, settings, model options, and VTT export. Transcription uses `faster-whisper` and diarization uses `pyannote/speaker-diarization-community-1`.
+It runs on your machine. Uploaded audio, transcripts, settings, logs, downloaded models, and exports are stored locally by default.
 
-The default one-click path is zero basic configuration: upload audio and click Process. The frontend asks the backend to download `distil-large-v3` (`Systran/faster-distil-whisper-large-v3`) from Hugging Face into `app_data/models/` if missing, then runs transcription with the configured local engines. If no Hugging Face token is provided, the job still completes with a single-speaker fallback (`SPEAKER_00`). Supplying a token enables pyannote diarization speaker assignment.
+## What It Does
 
-## One-click run
+- Upload audio files into a local library.
+- Download and use the default faster-whisper model when needed.
+- Run local transcription with optional Hugging Face pyannote diarization.
+- Fall back to a single-speaker transcript when no Hugging Face token is provided.
+- Edit transcript sentences and speaker display names.
+- Play audio from transcript timestamps.
+- Export VTT from sentence or speaker-turn views.
+
+## Requirements
+
+- Python 3.11 or 3.12
+- `uv`
+- Node.js and npm
+- Internet access on first model download
+
+A Hugging Face token is optional. Add one when you want pyannote speaker diarization.
+
+## Run Locally
 
 macOS/Linux:
 
@@ -14,52 +31,53 @@ macOS/Linux:
 ./scripts/one-click-dev.sh
 ```
 
-Windows PowerShell, assuming `uv` and `npm` are installed:
+Windows PowerShell:
 
 ```powershell
 .\scripts\one-click-dev.ps1
 ```
 
-The one-click scripts load `.env` when present, sync backend dependencies, install frontend dependencies, start the backend on `http://127.0.0.1:8000`, and start the frontend on `http://127.0.0.1:5173`.
+Then open:
 
-## Backend
-
-```bash
-uv sync --extra test
-uv run uvicorn whisperx_ui_backend.app:app --app-dir backend --reload --reload-dir backend --reload-dir tests
+```text
+http://127.0.0.1:5173
 ```
 
-The backend defaults to `app_data/` for SQLite, uploads, exports, logs, and models. Override with:
+The one-click scripts load `.env` when present, install dependencies, start the backend on `http://127.0.0.1:8000`, and start the frontend on `http://127.0.0.1:5173`.
 
-```bash
-WHISPERX_UI_APP_DATA=./app_data uv run uvicorn whisperx_ui_backend.app:app --app-dir backend --reload
+## Local Data
+
+By default, runtime data is stored under:
+
+```text
+app_data/
 ```
 
-Enable verbose backend debugging (stack traces + transcription/diarization runtime context):
+Set `WHISPERX_UI_APP_DATA` to use a different location:
 
 ```bash
-WHISPERX_UI_DEBUG=1 uv run uvicorn whisperx_ui_backend.app:app --app-dir backend --reload --log-level debug
+WHISPERX_UI_APP_DATA=/path/to/app-data ./scripts/one-click-dev.sh
 ```
 
-## Frontend
+## Release Builds
 
-```bash
-cd frontend
-npm install
-npm run dev
+Repository owners can run the manual GitHub Actions workflow **Build release executables** to produce:
+
+```text
+whisperx-ui-linux-x64.tar.gz
+whisperx-ui-macos-arm64.tar.gz
+whisperx-ui-windows-x64.zip
 ```
 
-Set `VITE_API_BASE_URL` when the backend is not running on `http://127.0.0.1:8000`.
+macOS release artifacts are Apple Silicon builds.
 
-## Release builds
-
-Build a local platform-dependent executable bundle:
+For local release packaging on macOS or Linux:
 
 ```bash
 ./scripts/build-release.sh
 ```
 
-The release bundle is written to:
+The bundle is written to:
 
 ```text
 dist/whisperx-ui/
@@ -77,54 +95,8 @@ Then open:
 http://127.0.0.1:8000
 ```
 
-In release mode, the FastAPI backend serves both the `/api/*` routes and the built React frontend. Runtime data is still stored in `app_data/` by default. Override it with:
+Windows release bundles are currently produced by GitHub Actions only.
 
-```bash
-WHISPERX_UI_APP_DATA=/path/to/app-data ./dist/whisperx-ui/whisperx-ui
-```
+## Contributing
 
-The GitHub Actions release workflow is manual-only. Repository owners can run **Build release executables** from the Actions tab to produce:
-
-```text
-whisperx-ui-linux-x64.tar.gz
-whisperx-ui-macos-arm64.tar.gz
-whisperx-ui-windows-x64.zip
-```
-
-macOS support is Apple Silicon only and is built on the `macos-14` runner. The configured Torch source marker keeps macOS on the normal Darwin-compatible Torch resolution path instead of the CUDA wheel index.
-
-## Tests
-
-```bash
-./scripts/run-backend-tests.sh
-```
-
-Note: first run needs internet access to install Python dependencies into `.venv`.
-
-Frontend tests are available when Node.js and npm are installed:
-
-```bash
-cd frontend
-npm test
-```
-
-## Runtime Smoke Check
-
-Run a local runtime smoke validation (health, upload, model prep, job run, transcript fetch):
-
-```bash
-./scripts/smoke-check-local-runtime.sh
-```
-
-Optional token-enabled diarization check:
-
-```bash
-HF_TOKEN=hf_xxx ./scripts/smoke-check-local-runtime.sh
-```
-
-The script runs in-process via FastAPI `TestClient` (no local socket bind required).
-If the model-prep step fails, the script prints the backend response and exits with `[FAIL]`.
-For silent/near-silent audio, the smoke check accepts zero transcript sentences as long as the job completes and transcript endpoint returns a valid list payload.
-First run also needs internet access to install Python dependencies and download models.
-
-Backend behavior also treats silent-audio zero-segment transcription as a valid completed job with an empty transcript.
+Developer setup, test commands, and validation workflows are documented in [CONTRIBUTE.md](CONTRIBUTE.md).

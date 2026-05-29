@@ -4,7 +4,7 @@ import os
 
 import uvicorn
 
-from .app import app
+from whisperx_ui_backend.app import app
 
 
 def main() -> None:
