@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -28,6 +28,7 @@ def frontend_dist_dir() -> Path:
 
 def mount_frontend(app: FastAPI) -> None:
     dist_dir = frontend_dist_dir()
+    dist_root = dist_dir.resolve()
     index_html = dist_dir / "index.html"
 
     if not index_html.is_file():
@@ -43,7 +44,21 @@ def mount_frontend(app: FastAPI) -> None:
 
     @app.get("/{path:path}", include_in_schema=False)
     def serve_spa(path: str) -> FileResponse:
-        requested_file = dist_dir / path
+        if path == "api" or path.startswith("api/"):
+            request_path = f"/{path}"
+            for route in app.routes:
+                methods = getattr(route, "methods", set()) or set()
+                path_regex = getattr(route, "path_regex", None)
+                if "GET" not in methods and path_regex and path_regex.match(request_path):
+                    raise HTTPException(status_code=405, detail="Method not allowed")
+            raise HTTPException(status_code=404, detail="Not found")
+
+        requested_file = (dist_dir / path).resolve()
+        try:
+            requested_file.relative_to(dist_root)
+        except ValueError:
+            return FileResponse(index_html)
+
         if requested_file.is_file():
             return FileResponse(requested_file)
         return FileResponse(index_html)

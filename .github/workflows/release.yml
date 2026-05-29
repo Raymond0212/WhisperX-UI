@@ -38,12 +38,16 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Sync backend dependencies
-        run: uv sync --extra build
+        run: uv sync --extra build --extra test
+
+      - name: Run backend tests
+        run: uv run pytest
 
       - name: Build frontend
         working-directory: frontend
         run: |
           npm ci
+          npm test
           npm run build
 
       - name: Copy frontend into backend package
@@ -94,6 +98,9 @@ jobs:
             --add-data "backend/whisperx_ui_backend/frontend_dist;whisperx_ui_backend/frontend_dist" `
             --paths backend `
             backend/whisperx_ui_backend/__main__.py
+
+      - name: Smoke executable bundle
+        run: uv run python scripts/smoke-check-release-bundle.py
 
       - name: Package Unix artifact
         if: runner.os != 'Windows'

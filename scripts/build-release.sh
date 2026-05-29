@@ -16,10 +16,12 @@ if ! command -v npm >/dev/null 2>&1; then
   exit 1
 fi
 
-uv sync --extra build
+uv sync --extra build --extra test
+uv run pytest
 
 cd "$ROOT_DIR/frontend"
 npm ci
+npm test
 npm run build
 
 cd "$ROOT_DIR"
@@ -44,5 +46,7 @@ uv run pyinstaller \
   --add-data "backend/whisperx_ui_backend/frontend_dist:whisperx_ui_backend/frontend_dist" \
   --paths backend \
   backend/whisperx_ui_backend/__main__.py
+
+uv run python scripts/smoke-check-release-bundle.py
 
 echo "Release build is in dist/$APP_NAME"

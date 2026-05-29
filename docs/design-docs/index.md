@@ -9,3 +9,4 @@ This directory contains technical design documentation for WhisperX UI. Design d
 | [Core Beliefs](core-beliefs.md) | Active | Foundational engineering and product principles. |
 | [Local-First Architecture](local-first-architecture.md) | Active | Local runtime, storage, processing, and Electron compatibility design. |
 | [Data Model And API Contract](data-model-and-api-contract.md) | Active | Initial SQLite entities and backend API contract. |
+| [Release Packaging](release-packaging.md) | Active | Local and CI release bundle boundaries. |
