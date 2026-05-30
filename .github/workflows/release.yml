@@ -144,6 +144,28 @@ jobs:
         with:
           path: release-assets
 
+      - name: Prepare release assets for GitHub size limit
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Keep each uploaded release asset comfortably below GitHub's 2 GiB limit.
+          max_bytes=2000000000
+          out_dir="release-assets/release-ready"
+          mkdir -p "${out_dir}"
+
+          while IFS= read -r -d '' file; do
+            base_name="$(basename "${file}")"
+            file_size="$(stat -c%s "${file}")"
+
+            if [ "${file_size}" -lt "${max_bytes}" ]; then
+              cp "${file}" "${out_dir}/${base_name}"
+            else
+              split_prefix="${out_dir}/${base_name}.part-"
+              split -b "${max_bytes}" -d -a 3 "${file}" "${split_prefix}"
+            fi
+          done < <(find release-assets -type f \( -name '*.tar.gz' -o -name '*.zip' \) -print0)
+
       - name: Create draft GitHub release
         uses: softprops/action-gh-release@v2
         with:
@@ -152,5 +174,4 @@ jobs:
           draft: true
           generate_release_notes: true
           files: |
-            release-assets/**/*.tar.gz
-            release-assets/**/*.zip
+            release-assets/release-ready/*
