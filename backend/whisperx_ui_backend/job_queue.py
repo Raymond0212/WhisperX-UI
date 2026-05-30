@@ -228,7 +228,8 @@ class JobQueueService:
                     )
                 if status in {"completed", "failed", "deleted"}:
                     return
-                if signal_code == signal.SIGKILL:
+                sigkill = getattr(signal, "SIGKILL", 9)
+                if signal_code == sigkill:
                     error = "Model worker was killed by SIGKILL; likely out of memory."
                 elif signal_code:
                     error = f"Model worker exited due to signal {signal_code}."
