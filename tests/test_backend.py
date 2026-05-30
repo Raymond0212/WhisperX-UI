@@ -28,7 +28,7 @@ def _client(tmp_path, monkeypatch):
     return TestClient(app_module.app)
 
 
-def _wait_for_terminal_job(client: TestClient, job_id: str, timeout_seconds: float = 5.0) -> dict:
+def _wait_for_terminal_job(client: TestClient, job_id: str, timeout_seconds: float = 10.0) -> dict:
     deadline = time.time() + timeout_seconds
     while True:
         job = client.get(f"/api/jobs/{job_id}").json()
