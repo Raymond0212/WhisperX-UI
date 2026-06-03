@@ -57,7 +57,7 @@ User opens app
 | AU-007 | Each upload is treated as a separate audio item.           |
 | AU-008 | Audio files are playable in the browser after upload.      |
 
-Initial supported audio extensions: `.mp3`, `.wav`, `.m4a`, `.flac`, `.ogg`, `.aac`.
+Supported audio extensions: `.aac`, `.aif`, `.aifc`, `.aiff`, `.amr`, `.caf`, `.flac`, `.m4a`, `.mka`, `.mp3`, `.mpga`, `.mpeg`, `.oga`, `.ogg`, `.opus`, `.wav`, `.wave`, `.webm`.
 
 ### Transcription
 

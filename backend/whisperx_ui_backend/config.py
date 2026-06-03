@@ -5,7 +5,27 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-SUPPORTED_AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac"}
+SUPPORTED_AUDIO_EXTENSION_ORDER = (
+    ".aac",
+    ".aif",
+    ".aifc",
+    ".aiff",
+    ".amr",
+    ".caf",
+    ".flac",
+    ".m4a",
+    ".mka",
+    ".mp3",
+    ".mpga",
+    ".mpeg",
+    ".oga",
+    ".ogg",
+    ".opus",
+    ".wav",
+    ".wave",
+    ".webm",
+)
+SUPPORTED_AUDIO_EXTENSIONS = set(SUPPORTED_AUDIO_EXTENSION_ORDER)
 
 
 @dataclass(frozen=True)

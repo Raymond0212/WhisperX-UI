@@ -1,6 +1,8 @@
 import React from "react";
 import { Check, FileAudio, LoaderCircle, Play, Plus, Search } from "lucide-react";
 
+const SUPPORTED_AUDIO_ACCEPT = ".aac,.aif,.aifc,.aiff,.amr,.caf,.flac,.m4a,.mka,.mp3,.mpga,.mpeg,.oga,.ogg,.opus,.wav,.wave,.webm";
+
 export function LibraryPanel({
   audioItems,
   fileInputRef,
@@ -24,7 +26,7 @@ export function LibraryPanel({
             ref={fileInputRef}
             name="file"
             type="file"
-            accept=".mp3,.wav,.m4a,.flac,.ogg,.aac"
+            accept={SUPPORTED_AUDIO_ACCEPT}
             onChange={onFileInput}
           />
         </label>

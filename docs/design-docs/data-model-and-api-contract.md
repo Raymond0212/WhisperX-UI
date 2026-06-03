@@ -157,7 +157,7 @@ Responsibilities:
 
 Current implementation notes:
 
-- Supported extensions are `.mp3`, `.wav`, `.m4a`, `.flac`, `.ogg`, and `.aac`.
+- Supported extensions are `.aac`, `.aif`, `.aifc`, `.aiff`, `.amr`, `.caf`, `.flac`, `.m4a`, `.mka`, `.mp3`, `.mpga`, `.mpeg`, `.oga`, `.ogg`, `.opus`, `.wav`, `.wave`, and `.webm`.
 - Stored filenames use a UUID prefix plus a sanitized source filename.
 - MIME type is normalized from the filename when the supplied content type is not audio.
 - Streaming and download resolve the stored path and require it to remain inside the configured uploads directory.

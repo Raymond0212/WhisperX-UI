@@ -8,6 +8,7 @@ import types
 import uuid
 from datetime import UTC, datetime
 
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -19,6 +20,63 @@ def _upload_audio(client: TestClient) -> dict:
     )
     assert response.status_code == 200, response.text
     return response.json()
+
+
+@pytest.mark.parametrize(
+    ("filename", "content_type", "expected_mime_type"),
+    [
+        ("voice-note.m4a", "audio/mp4", "audio/mp4"),
+        ("browser-capture.webm", "audio/webm", "audio/webm"),
+        ("podcast.opus", None, "audio/ogg"),
+        ("archive.aiff", None, "audio/aiff"),
+        ("recording.caf", None, "audio/x-caf"),
+        ("call.amr", None, "audio/amr"),
+    ],
+)
+def test_upload_accepts_expanded_audio_extensions(tmp_path, monkeypatch, filename, content_type, expected_mime_type):
+    with _client(tmp_path, monkeypatch) as client:
+        response = client.post(
+            "/api/audio",
+            files={"file": (filename, b"fake audio bytes", content_type)},
+        )
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["original_filename"] == filename
+        assert payload["stored_filename"].endswith(f"-{filename}")
+        assert payload["mime_type"] == expected_mime_type
+        assert payload["size_bytes"] == len(b"fake audio bytes")
+
+
+def test_upload_rejects_unsupported_extension_with_expanded_supported_list(tmp_path, monkeypatch):
+    with _client(tmp_path, monkeypatch) as client:
+        response = client.post(
+            "/api/audio",
+            files={"file": ("notes.txt", b"not audio", "text/plain")},
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"] == (
+            "Unsupported audio extension. Use: "
+            ".aac, .aif, .aifc, .aiff, .amr, .caf, .flac, .m4a, .mka, .mp3, .mpga, .mpeg, "
+            ".oga, .ogg, .opus, .wav, .wave, .webm"
+        )
+
+
+def test_stream_and_download_use_audio_content_type_for_newly_supported_format(tmp_path, monkeypatch):
+    with _client(tmp_path, monkeypatch) as client:
+        upload = client.post(
+            "/api/audio",
+            files={"file": ("browser-capture.webm", b"fake audio bytes", "audio/webm")},
+        )
+        assert upload.status_code == 200, upload.text
+        audio = upload.json()
+
+        stream_response = client.get(f"/api/audio/{audio['id']}/stream")
+        assert stream_response.status_code == 200, stream_response.text
+        assert stream_response.headers["content-type"] == "audio/webm"
+
+        download_response = client.get(f"/api/audio/{audio['id']}/download")
+        assert download_response.status_code == 200, download_response.text
+        assert download_response.headers["content-type"] == "audio/webm"
 
 
 def _client(tmp_path, monkeypatch):

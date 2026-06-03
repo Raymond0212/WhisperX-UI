@@ -18,7 +18,7 @@ from typing import Any, Protocol
 
 from fastapi import HTTPException, UploadFile
 
-from .config import SUPPORTED_AUDIO_EXTENSIONS, AppConfig
+from .config import SUPPORTED_AUDIO_EXTENSION_ORDER, SUPPORTED_AUDIO_EXTENSIONS, AppConfig
 from .database import transaction
 from .model_registry import (
     DEFAULT_DIARIZATION_MODEL,
@@ -279,14 +279,37 @@ def sanitize_filename(filename: str) -> str:
 def require_audio_extension(filename: str) -> None:
     suffix = Path(filename).suffix.lower()
     if suffix not in SUPPORTED_AUDIO_EXTENSIONS:
-        supported = ", ".join(sorted(SUPPORTED_AUDIO_EXTENSIONS))
+        supported = ", ".join(SUPPORTED_AUDIO_EXTENSION_ORDER)
         raise HTTPException(
             status_code=400,
             detail=f"Unsupported audio extension. Use: {supported}",
         )
 
 
+_AUDIO_CONTENT_TYPE_OVERRIDES = {
+    ".aac": "audio/aac",
+    ".aif": "audio/aiff",
+    ".aifc": "audio/aiff",
+    ".aiff": "audio/aiff",
+    ".amr": "audio/amr",
+    ".caf": "audio/x-caf",
+    ".m4a": "audio/mp4",
+    ".mka": "audio/x-matroska",
+    ".mpga": "audio/mpeg",
+    ".mpeg": "audio/mpeg",
+    ".oga": "audio/ogg",
+    ".ogg": "audio/ogg",
+    ".opus": "audio/ogg",
+    ".wav": "audio/wav",
+    ".wave": "audio/wav",
+    ".webm": "audio/webm",
+}
+
+
 def infer_audio_content_type(filename: str, supplied_content_type: str | None = None) -> str:
+    suffix = Path(filename).suffix.lower()
+    if suffix in _AUDIO_CONTENT_TYPE_OVERRIDES:
+        return _AUDIO_CONTENT_TYPE_OVERRIDES[suffix]
     if supplied_content_type and supplied_content_type.lower().startswith("audio/"):
         return supplied_content_type
     guessed = mimetypes.guess_type(filename)[0]

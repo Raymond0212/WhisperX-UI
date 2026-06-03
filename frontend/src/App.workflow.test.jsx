@@ -279,11 +279,14 @@ test("drives the upload, process, review, edit, export, failed job, and delete w
   render(<App />);
 
   expect(await screen.findByText("Broken clip")).not.toBeNull();
+  expect(screen.getByLabelText("Audio file").getAttribute("accept")).toBe(
+    ".aac,.aif,.aifc,.aiff,.amr,.caf,.flac,.m4a,.mka,.mp3,.mpga,.mpeg,.oga,.ogg,.opus,.wav,.wave,.webm",
+  );
   fireEvent.click(screen.getByRole("button", { name: /open settings/i }));
   expect(screen.getByDisplayValue("distil-large-v3")).not.toBeNull();
   fireEvent.click(screen.getByRole("button", { name: /close settings/i }));
 
-  const file = new File(["demo audio"], "meeting.wav", { type: "audio/wav" });
+  const file = new File(["demo audio"], "meeting.m4a", { type: "audio/mp4" });
   fireEvent.change(screen.getByLabelText("Audio file"), { target: { files: [file] } });
   fireEvent.change(screen.getByPlaceholderText("Optional display title"), {
     target: { value: "Demo upload" },
@@ -295,7 +298,7 @@ test("drives the upload, process, review, edit, export, failed job, and delete w
     `${API_BASE}/api/audio/audio-uploaded/download`,
   );
   const uploadRequest = requests.find((request) => request.method === "POST" && request.path === "/api/audio");
-  expect(uploadRequest.options.body.get("file").name).toBe("meeting.wav");
+  expect(uploadRequest.options.body.get("file").name).toBe("meeting.m4a");
   expect(uploadRequest.options.body.get("display_title")).toBe("Demo upload");
 
   fireEvent.click(screen.getByRole("button", { name: /open settings/i }));
