@@ -671,12 +671,25 @@ export function App() {
     if (!query) return audioItems;
     return audioItems.filter((audio) => audio.display_title.toLocaleLowerCase().includes(query));
   }, [audioItems, deferredSearchQuery]);
+  const closeMobilePane = React.useCallback(() => {
+    if (!isMobileViewport) {
+      setIsMobileLibraryOpen(false);
+      return;
+    }
+    if (typeof window !== "undefined" && mobilePaneHistoryRef.current) {
+      mobilePaneHistoryRef.current = false;
+      setIsMobileLibraryOpen(false);
+      window.history.back();
+      return;
+    }
+    setIsMobileLibraryOpen(false);
+  }, [isMobileViewport]);
   const handleSelectSection = React.useCallback((sectionId) => {
     setActiveSection(sectionId);
     if (isMobileViewport) {
-      setIsMobileLibraryOpen(false);
+      closeMobilePane();
     }
-  }, [isMobileViewport]);
+  }, [closeMobilePane, isMobileViewport]);
 
   return (
     <main
@@ -690,6 +703,9 @@ export function App() {
       <AppShell
         activeSection={activeSection}
         isBackendAvailable={isBackendAvailable}
+        isMobileLibraryOpen={isMobileLibraryOpen}
+        isMobileViewport={isMobileViewport}
+        onCloseMainPane={closeMobilePane}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onSelectSection={handleSelectSection}
         onToggleTheme={toggleThemePreference}

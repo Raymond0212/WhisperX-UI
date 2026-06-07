@@ -12,12 +12,78 @@ export function AppShell({
   activeSection,
   children,
   isBackendAvailable,
+  isMobileLibraryOpen = false,
+  isMobileViewport = false,
+  onCloseMainPane,
   onOpenSettings,
   onSelectSection,
   onToggleTheme,
   resolvedTheme,
   sidebar,
 }) {
+  const [swipeOffset, setSwipeOffset] = React.useState(0);
+  const swipeStateRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!isMobileLibraryOpen) {
+      swipeStateRef.current = null;
+      setSwipeOffset(0);
+    }
+  }, [isMobileLibraryOpen]);
+
+  const isDraggingPane = swipeOffset > 0;
+
+  function resetSwipe() {
+    swipeStateRef.current = null;
+    setSwipeOffset(0);
+  }
+
+  function handleTouchStart(event) {
+    if (!isMobileViewport || !isMobileLibraryOpen || event.touches.length !== 1) return;
+    if (shouldIgnoreSwipeStart(event.target, event.currentTarget)) return;
+    const touch = event.touches[0];
+    swipeStateRef.current = {
+      identifier: touch.identifier,
+      engaged: false,
+      startX: touch.clientX,
+      startY: touch.clientY,
+    };
+  }
+
+  function handleTouchMove(event) {
+    const swipeState = swipeStateRef.current;
+    if (!swipeState) return;
+    const touch = Array.from(event.touches).find((item) => item.identifier === swipeState.identifier);
+    if (!touch) return;
+    const deltaX = touch.clientX - swipeState.startX;
+    const deltaY = touch.clientY - swipeState.startY;
+
+    if (!swipeState.engaged) {
+      if (deltaX <= 0) {
+        resetSwipe();
+        return;
+      }
+      if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) return;
+      if (Math.abs(deltaX) <= Math.abs(deltaY)) {
+        resetSwipe();
+        return;
+      }
+      swipeState.engaged = true;
+    }
+
+    event.preventDefault();
+    setSwipeOffset(Math.max(0, Math.min(deltaX, window.innerWidth || 480)));
+  }
+
+  function handleTouchEnd() {
+    const threshold = Math.min(120, Math.max(72, (window.innerWidth || 412) * 0.22));
+    const shouldClose = swipeOffset >= threshold;
+    resetSwipe();
+    if (shouldClose) {
+      onCloseMainPane?.();
+    }
+  }
+
   return (
     <div className="vault-shell">
       <SectionRail
@@ -28,7 +94,14 @@ export function AppShell({
         resolvedTheme={resolvedTheme}
       />
       <div className="secondary-sidebar">{sidebar}</div>
-      <section className="main-pane">
+      <section
+        className={`main-pane ${isDraggingPane ? "is-gesture-dragging" : ""}`}
+        style={{ "--mobile-pane-offset": `${swipeOffset}px` }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={resetSwipe}
+      >
         {!isBackendAvailable && (
           <div className="backend-warning" role="alert">
             Backend service is unavailable. Start backend at <code>http://127.0.0.1:8000</code>.
@@ -38,6 +111,24 @@ export function AppShell({
       </section>
     </div>
   );
+}
+
+function shouldIgnoreSwipeStart(target, container) {
+  if (!(target instanceof Element) || !(container instanceof Element)) return false;
+  if (target.closest("input, textarea, select, button, a, [contenteditable='true'], [role='slider'], [data-swipe-ignore='true']")) {
+    return true;
+  }
+
+  let current = target;
+  while (current && current !== container) {
+    const style = window.getComputedStyle(current);
+    if (current.scrollWidth > current.clientWidth + 1 && /(auto|scroll)/.test(style.overflowX)) {
+      return true;
+    }
+    current = current.parentElement;
+  }
+
+  return false;
 }
 
 function SectionRail({ activeSection, onOpenSettings, onSelectSection, onToggleTheme, resolvedTheme }) {
