@@ -4,7 +4,7 @@
 
 WhisperX UI is a single-user, local-first desktop-style web application for faster-whisper transcription with optional Hugging Face pyannote diarization. A user can upload audio, configure transcription and diarization, run one-click processing, review a sentence-level transcript with speaker labels, edit transcript text, rename speakers, play audio from transcript sentences, and persist data locally using SQLite.
 
-The frontend is React. The backend is Python. The app is initially a local web app and should remain suitable for future Electron packaging.
+The frontend is Vite React with official shadcn/ui source components. The backend is Python. The app is initially a local web app and should remain suitable for future Electron packaging.
 
 ## Goals
 
@@ -300,12 +300,14 @@ Recommended stored filename format:
 | Transcript Review | Show audio player, speaker labeling, speaker samples, sentence view, speaker-turn view, sentence playback, editing, and VTT export. |
 | Settings          | Configure default transcription model, diarization model, runtime defaults, local model paths, and storage location if supported.   |
 
+The UI shell uses a rail, secondary sidebar, and main pane hierarchy. The rail exposes Library, Jobs, Speakers, and Settings. The secondary sidebar presents derived tree views from existing records and does not imply persisted folders.
+
 ## Product Decisions
 
 - User model: single-user.
 - Authentication: not required.
 - Runtime style: local desktop-style web app.
-- Frontend: React.
+- Frontend: Vite React with official shadcn/ui.
 - Backend: Python.
 - Database: SQLite.
 - Default processing: faster-whisper with downloaded local model files.
@@ -317,4 +319,4 @@ Recommended stored filename format:
 - Transcript format: VTT-style sentence chunks.
 - Speaker labels: globally editable display names.
 - Playback: timestamped sentence and speaker sample playback.
-- Packaging target: Python server with React frontend, suitable for future Electron packaging.
+- Packaging target: Python server with Vite React frontend, suitable for future Electron packaging.

@@ -2,7 +2,15 @@
 
 ## Scope
 
-The frontend is a React browser UI designed for local use and future Electron packaging. It should communicate with the Python backend through HTTP APIs and should not access SQLite or local filesystem paths directly.
+The frontend is a Vite React browser UI designed for local use and future Electron packaging. It uses official shadcn/ui source components and should communicate with the Python backend through HTTP APIs without accessing SQLite or local filesystem paths directly.
+
+## Navigation Structure
+
+The primary layout is a rail, secondary sidebar, and main pane hierarchy:
+
+- Section rail: leftmost icon-and-label vault for Library, Jobs, Speakers, and Settings.
+- Secondary sidebar: derived tree/sidebar for the active section, using existing audio, job, speaker, and settings data without persisted folders.
+- Main pane: detailed workspace for audio playback, processing controls, transcript review, editing, speaker rename flows, exports, and modal dialogs.
 
 ## Main Screens
 
@@ -46,6 +54,12 @@ Current implementation covers the core upload/library/workspace/settings flow wi
 ## Frontend Tests
 
 `frontend/package.json` defines `npm test`, which runs Node.js utility tests for extracted helpers in `frontend/src/jobUtils.js` and mounted Vitest/JSDOM workflow tests for the upload, process, review, edit, export, failed-job, delete, and stored-token flows.
+
+Frontend validation should also lint the repository design contract from the repository root:
+
+- `npx @google/design.md lint DESIGN.md`
+- `cd frontend && npm test`
+- `cd frontend && npm run build`
 
 Current frontend coverage includes:
 

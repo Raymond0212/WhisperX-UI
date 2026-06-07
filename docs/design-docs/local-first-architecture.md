@@ -5,7 +5,7 @@
 The app runs as a local web application:
 
 ```text
-React frontend in browser
+Vite React frontend in browser
 -> local Python API server
 -> SQLite and local filesystem
 -> faster-whisper and optional Hugging Face pyannote processors

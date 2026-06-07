@@ -1,7 +1,9 @@
 import React from "react";
-import { ChevronDown, Download, Pause, Play, RotateCcw, Square, Volume2, Trash2 } from "lucide-react";
+import { Download, Pause, Play, RotateCcw, Square, Trash2, Volume2 } from "lucide-react";
 import { API_BASE } from "../api.js";
 import { TranscriptReview } from "./TranscriptReview.jsx";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 
 export function WorkspacePanel({
   audioRef,
@@ -24,7 +26,6 @@ export function WorkspacePanel({
   viewMode,
 }) {
   const [isEditingTitle, setIsEditingTitle] = React.useState(false);
-  const [isSpeakerSettingsOpen, setIsSpeakerSettingsOpen] = React.useState(true);
   const titleInputRef = React.useRef(null);
 
   React.useEffect(() => {
@@ -38,7 +39,8 @@ export function WorkspacePanel({
   }, [selectedAudio?.id]);
 
   const isActiveJob = selectedJob?.status === "queued" || selectedJob?.status === "processing";
-  const hasCompletedLatestJob = selectedAudio?.latest_job_status === "completed";
+  const hasCompletedLatestJob = selectedJob?.status === "completed" || selectedAudio?.latest_job_status === "completed";
+  const processButtonVariant = isActiveJob ? "destructive" : hasCompletedLatestJob ? "secondary" : "default";
   const processButtonLabel = isActiveJob
     ? "Stop"
     : hasCompletedLatestJob
@@ -52,10 +54,11 @@ export function WorkspacePanel({
         <div className="workspace-shell">
           <div className="audio-header">
             <div className="title-field">
-              <span className="panel-kicker">Current file</span>
+              <span className="workspace-breadcrumb">Library <span>/</span></span>
               {isEditingTitle ? (
                 <input
                   ref={titleInputRef}
+                  className="title-display title-edit-input inline-editing"
                   aria-label="Current file title"
                   title={selectedAudio.display_title}
                   value={selectedAudio.display_title}
@@ -68,19 +71,21 @@ export function WorkspacePanel({
               ) : (
                 <button
                   type="button"
-                  className="title-display"
+                  className="title-button"
                   aria-label="Current file title"
                   title={selectedAudio.display_title}
                   onClick={() => setIsEditingTitle(true)}
                 >
-                  {selectedAudio.display_title}
+                  <span className="title-display">{selectedAudio.display_title}</span>
                 </button>
               )}
             </div>
             <div className="toolbar">
-              <button
+              <Button
                 type="button"
-                className={hasCompletedLatestJob && !isActiveJob ? "process-button process-button--reprocess" : "process-button"}
+                variant={processButtonVariant}
+                size="sm"
+                className="process-button"
                 onClick={() => {
                   if (isActiveJob) {
                     onStopJob(selectedJob);
@@ -90,61 +95,62 @@ export function WorkspacePanel({
                 }}
                 aria-label={processButtonLabel}
               >
-                <ProcessButtonIcon size={16} />
+                <ProcessButtonIcon data-icon="inline-start" />
                 <span className="toolbar-label">{processButtonLabel}</span>
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 aria-label="Download audio"
                 data-download-url={`${API_BASE}/api/audio/${selectedAudio.id}/download`}
                 onClick={() => {
                   window.location.assign(`${API_BASE}/api/audio/${selectedAudio.id}/download`);
                 }}
               >
-                <Download size={16} />
+                <Download data-icon="inline-start" />
                 <span className="toolbar-label">Download Audio</span>
-              </button>
+              </Button>
               {selectedJob ? (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
                   aria-label="Delete transcript"
                   onClick={() => {
                     if (!window.confirm("Delete this transcript? This cannot be undone.")) return;
                     onDeleteTranscript(selectedJob);
                   }}
                 >
-                  <Trash2 size={16} />
+                  <Trash2 data-icon="inline-start" />
                   <span className="toolbar-label">Delete Transcript</span>
-                </button>
+                </Button>
               ) : (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
                   aria-label="Delete audio"
                   onClick={() => {
                     if (!window.confirm("Delete this audio item? This cannot be undone.")) return;
                     onDeleteAudio(selectedAudio);
                   }}
                 >
-                  <Trash2 size={16} />
+                  <Trash2 data-icon="inline-start" />
                   <span className="toolbar-label">Delete Audio</span>
-                </button>
+                </Button>
               )}
             </div>
           </div>
 
-          {selectedJob && <p className="active-model-subtitle">{selectedJob.transcription_model}</p>}
-
-          <CustomAudioPlayer audioRef={audioRef} src={`${API_BASE}/api/audio/${selectedAudio.id}/stream`} />
-          {!selectedJob && (
-            <StandaloneSpeakerSettings
-              selectedAudio={selectedAudio}
-              onUpdateRecordingSettings={onUpdateRecordingSettings}
-              isOpen={isSpeakerSettingsOpen}
-              onToggle={() => setIsSpeakerSettingsOpen((current) => !current)}
-            />
-          )}
-          {selectedJob?.status === "failed" && <p className="error">{selectedJob.error_message}</p>}
-          {selectedJob && (
+          <div className="workspace-content">
+            <Card className="player-card">
+              <CardContent>
+                <CustomAudioPlayer audioRef={audioRef} src={`${API_BASE}/api/audio/${selectedAudio.id}/stream`} />
+              </CardContent>
+            </Card>
+            <RunSummaryCards job={selectedJob} sentences={sentences} speakers={speakers} />
+            {selectedJob?.status === "failed" && <p className="error">{selectedJob.error_message}</p>}
             <TranscriptReview
               job={selectedJob}
               selectedAudio={selectedAudio}
@@ -158,16 +164,49 @@ export function WorkspacePanel({
               onUpdateRecordingSettings={onUpdateRecordingSettings}
               onUpdateSentence={onUpdateSentence}
             />
-          )}
+          </div>
         </div>
       ) : (
-        <div className="empty-state">
-          <strong>Select an audio file to open the workspace.</strong>
-          <span>The library expands first; choosing a file slides it into a compact sidebar.</span>
+        <div className="journey-empty">
+          <span>Select Something to Begin Your Journey</span>
+          <span className="sr-only">Select an audio file to open the workspace.</span>
         </div>
       )}
     </section>
   );
+}
+
+function RunSummaryCards({ job, sentences, speakers }) {
+  const statusLabel = job?.status ? sentenceCase(job.status) : "Not started";
+  const modelLabel = job?.transcription_model || "No run selected";
+  const speakerLabel = job?.status === "completed" ? `${speakers.length} detected` : "Pending";
+  const transcriptLabel = job?.status === "completed" ? `${sentences.length} sentences` : "Pending";
+
+  return (
+    <div className="run-summary-grid" aria-label="Run summary">
+      <SummaryCard label="Status" value={statusLabel} />
+      <SummaryCard label="Model" value={modelLabel} />
+      <SummaryCard label="Speakers" value={speakerLabel} />
+      <SummaryCard label="Transcript" value={transcriptLabel} />
+    </div>
+  );
+}
+
+function SummaryCard({ label, value }) {
+  return (
+    <Card size="sm" className="summary-card">
+      <CardContent>
+        <span>{label}</span>
+        <strong>{value}</strong>
+      </CardContent>
+    </Card>
+  );
+}
+
+function sentenceCase(value) {
+  return String(value || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/^\w/, (char) => char.toUpperCase());
 }
 
 function CustomAudioPlayer({ audioRef, src }) {
@@ -251,72 +290,4 @@ function formatPlayerTime(seconds) {
   const mins = Math.floor(whole / 60);
   const secs = whole % 60;
   return `${mins}:${String(secs).padStart(2, "0")}`;
-}
-
-function StandaloneSpeakerSettings({ selectedAudio, onUpdateRecordingSettings, isOpen, onToggle }) {
-  const [values, setValues] = React.useState({
-    speaker_count: selectedAudio.speaker_count ?? "",
-    min_speakers: selectedAudio.min_speakers ?? "",
-    max_speakers: selectedAudio.max_speakers ?? "",
-  });
-
-  React.useEffect(() => {
-    setValues({
-      speaker_count: selectedAudio.speaker_count ?? "",
-      min_speakers: selectedAudio.min_speakers ?? "",
-      max_speakers: selectedAudio.max_speakers ?? "",
-    });
-  }, [selectedAudio.id, selectedAudio.speaker_count, selectedAudio.min_speakers, selectedAudio.max_speakers]);
-
-  function handleBlur() {
-    onUpdateRecordingSettings(selectedAudio, values);
-  }
-
-  return (
-    <section className={`speaker-panel ${isOpen ? "open" : ""}`}>
-      <button type="button" className="speaker-panel-toggle" aria-expanded={isOpen} onClick={onToggle}>
-        <span>Speaker Settings</span>
-        <ChevronDown size={17} aria-hidden="true" />
-      </button>
-      {isOpen && (
-        <div className="speaker-list">
-          <div className="recording-settings" aria-label="Recording diarization settings">
-            <label>
-              <span>Speaker count</span>
-              <input
-                type="number"
-                min="1"
-                max="20"
-                value={values.speaker_count}
-                onChange={(event) => setValues((current) => ({ ...current, speaker_count: event.target.value }))}
-                onBlur={handleBlur}
-              />
-            </label>
-            <label>
-              <span>Min speakers</span>
-              <input
-                type="number"
-                min="1"
-                max="20"
-                value={values.min_speakers}
-                onChange={(event) => setValues((current) => ({ ...current, min_speakers: event.target.value }))}
-                onBlur={handleBlur}
-              />
-            </label>
-            <label>
-              <span>Max speakers</span>
-              <input
-                type="number"
-                min="1"
-                max="20"
-                value={values.max_speakers}
-                onChange={(event) => setValues((current) => ({ ...current, max_speakers: event.target.value }))}
-                onBlur={handleBlur}
-              />
-            </label>
-          </div>
-        </div>
-      )}
-    </section>
-  );
 }

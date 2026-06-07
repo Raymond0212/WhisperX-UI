@@ -1,6 +1,6 @@
 import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { AppHeader } from "./components/AppHeader.jsx";
+import { AppShell } from "./components/AppShell.jsx";
 import { LibraryPanel } from "./components/LibraryPanel.jsx";
 import { SettingsModal } from "./components/SettingsModal.jsx";
 import { ToastViewport } from "./components/ToastViewport.jsx";
@@ -19,12 +19,27 @@ import {
   normalizeJobSettings,
 } from "./jobUtils.js";
 import "./styles.css";
+import "./styles/base.css";
+import "./styles/layout.css";
+import "./styles/left-panel.css";
+import "./styles/header.css";
+import "./styles/right-panel.css";
+import "./styles/transcript.css";
+import "./styles/modals.css";
+import "./styles/notifications.css";
+import "./styles/page.css";
+import "./styles/responsive.css";
+
+const THEME_STORAGE_KEY = "whisperx-ui-theme";
+const VALID_THEME_PREFERENCES = new Set(["system", "light", "dark"]);
 
 export function App() {
   const [audioItems, setAudioItems] = useState([]);
   const [selectedAudio, setSelectedAudio] = useState(null);
   const [selectedJob, setSelectedJob] = useState(null);
   const [jobs, setJobs] = useState([]);
+  const [jobsByAudioId, setJobsByAudioId] = useState({});
+  const [speakerDirectory, setSpeakerDirectory] = useState([]);
   const [speakers, setSpeakers] = useState([]);
   const [sentences, setSentences] = useState([]);
   const [settings, setSettings] = useState({});
@@ -42,8 +57,15 @@ export function App() {
   const [isUploadingAudio, setIsUploadingAudio] = useState(false);
   const [uploadProgressPercent, setUploadProgressPercent] = useState(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("library");
   const [isMobileLibraryOpen, setIsMobileLibraryOpen] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(() =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia("(max-width: 900px)").matches
+      : false,
+  );
   const [viewMode, setViewMode] = useState("sentences");
+  const [themePreference, setThemePreference] = useState(() => getStoredThemePreference());
   const [toasts, setToasts] = useState([]);
   const [isBackendAvailable, setIsBackendAvailable] = useState(true);
   const fileInputRef = useRef(null);
@@ -54,6 +76,89 @@ export function App() {
   const toastIdRef = useRef(0);
   const toastTimersRef = useRef(new Map());
   const stoppedJobIdsRef = useRef(new Set());
+  const mobilePaneHistoryRef = useRef(false);
+
+  useEffect(() => {
+    const media = typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia("(prefers-color-scheme: dark)")
+      : null;
+
+    applyThemePreference(themePreference);
+    if (!media || themePreference !== "system") return undefined;
+
+    const handleChange = () => applyThemePreference("system");
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", handleChange);
+      return () => media.removeEventListener("change", handleChange);
+    }
+    media.addListener(handleChange);
+    return () => media.removeListener(handleChange);
+  }, [themePreference]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+    const media = window.matchMedia("(max-width: 900px)");
+    const handleChange = (event) => {
+      setIsMobileViewport(event.matches);
+      if (!event.matches) {
+        setIsMobileLibraryOpen(false);
+        mobilePaneHistoryRef.current = false;
+      }
+    };
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", handleChange);
+      return () => media.removeEventListener("change", handleChange);
+    }
+    media.addListener(handleChange);
+    return () => media.removeListener(handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !isMobileViewport) return undefined;
+    const handlePopState = () => {
+      if (mobilePaneHistoryRef.current) {
+        mobilePaneHistoryRef.current = false;
+        setIsMobileLibraryOpen(false);
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [isMobileViewport]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !isMobileViewport) return;
+    if (isMobileLibraryOpen && !mobilePaneHistoryRef.current) {
+      window.history.pushState({ whisperxMobilePane: true }, "");
+      mobilePaneHistoryRef.current = true;
+      return;
+    }
+    if (!isMobileLibraryOpen) {
+      mobilePaneHistoryRef.current = false;
+    }
+  }, [isMobileLibraryOpen, isMobileViewport]);
+
+  useEffect(() => {
+    if (!selectedAudio) {
+      setIsMobileLibraryOpen(false);
+    }
+  }, [selectedAudio]);
+
+  useEffect(() => {
+    if (activeSection !== "speakers" || audioItems.length === 0) return;
+    let cancelled = false;
+
+    async function hydrateSpeakerDirectory() {
+      const directory = await buildSpeakerDirectory(audioItems, jobsByAudioId);
+      if (!cancelled) {
+        setSpeakerDirectory(directory);
+      }
+    }
+
+    void hydrateSpeakerDirectory();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, audioItems, jobsByAudioId]);
 
   useEffect(() => {
     notify("Ready");
@@ -112,7 +217,23 @@ export function App() {
   }, [selectedAudio?.id]);
 
   async function refreshLibrary() {
-    setAudioItems(await api("/api/audio"));
+    const nextAudioItems = await api("/api/audio");
+    setAudioItems(nextAudioItems);
+    void refreshJobsForAudioItems(nextAudioItems);
+    return nextAudioItems;
+  }
+
+  async function refreshJobsForAudioItems(audioList) {
+    const entries = await Promise.all(
+      audioList.map(async (audio) => {
+        try {
+          return [audio.id, await api(`/api/audio/${audio.id}/jobs`)];
+        } catch {
+          return [audio.id, []];
+        }
+      }),
+    );
+    setJobsByAudioId(Object.fromEntries(entries));
   }
 
   function removeToast(id) {
@@ -146,6 +267,21 @@ export function App() {
     scheduleToastRemoval(id, duration);
   }
 
+  function updateThemePreference(nextPreference) {
+    if (!VALID_THEME_PREFERENCES.has(nextPreference)) return;
+    setThemePreference(nextPreference);
+    if (typeof window === "undefined") return;
+    if (nextPreference === "system") {
+      window.localStorage.removeItem(THEME_STORAGE_KEY);
+      return;
+    }
+    window.localStorage.setItem(THEME_STORAGE_KEY, nextPreference);
+  }
+
+  function toggleThemePreference() {
+    updateThemePreference(resolveThemeMode(themePreference) === "dark" ? "light" : "dark");
+  }
+
   async function loadSettings() {
     const loaded = await api("/api/settings");
     setSettings(loaded);
@@ -162,20 +298,28 @@ export function App() {
     setJobSettings((current) => mergeJobSettings({ ...options.defaults, ...current }));
   }
 
-  async function selectAudio(audio) {
-    setIsMobileLibraryOpen(false);
+  async function selectAudio(audio, preferredJob = null) {
+    if (isMobileViewport) {
+      setIsMobileLibraryOpen(true);
+    }
     setSelectedAudio(audio);
     setSelectedJob(null);
     setSpeakers([]);
     setSentences([]);
-    const nextJobs = await api(`/api/audio/${audio.id}/jobs`);
+    const nextJobs = jobsByAudioId[audio.id] || (await api(`/api/audio/${audio.id}/jobs`));
     setJobs(nextJobs);
-    const completed = nextJobs.find((job) => job.status === "completed");
-    if (completed) await openJob(completed);
+    setJobsByAudioId((current) => ({ ...current, [audio.id]: nextJobs }));
+    const nextJob = preferredJob || nextJobs[0];
+    if (nextJob) await openJob(nextJob);
   }
 
   async function openJob(job) {
     setSelectedJob(job);
+    if (job.status !== "completed") {
+      setSpeakers([]);
+      setSentences([]);
+      return;
+    }
     const [nextSpeakers, nextSentences] = await Promise.all([
       api(`/api/jobs/${job.id}/speakers`),
       api(`/api/jobs/${job.id}/transcript`),
@@ -186,6 +330,13 @@ export function App() {
 
   function updateJobSetting(name, value) {
     setJobSettings((current) => ({ ...current, [name]: value }));
+  }
+
+  function closeSettings() {
+    setIsSettingsOpen(false);
+    if (activeSection === "settings") {
+      setActiveSection("library");
+    }
   }
 
   function handleFileInput(event) {
@@ -297,12 +448,13 @@ export function App() {
     setSelectedJob(null);
     setSpeakers([]);
     setSentences([]);
+    setSpeakerDirectory((items) => items.filter((entry) => entry.jobId !== job.id));
     if (!selectedAudio) return;
     const nextJobs = await api(`/api/audio/${selectedAudio.id}/jobs`);
     setJobs(nextJobs);
-    const completed = nextJobs.find((item) => item.status === "completed");
-    if (completed) {
-      await openJob(completed);
+    setJobsByAudioId((current) => ({ ...current, [selectedAudio.id]: nextJobs }));
+    if (nextJobs[0]) {
+      await openJob(nextJobs[0]);
     }
     await refreshLibrary();
   }
@@ -315,9 +467,9 @@ export function App() {
     if (!selectedAudio) return;
     const nextJobs = await api(`/api/audio/${selectedAudio.id}/jobs`);
     setJobs(nextJobs);
-    const completed = nextJobs.find((item) => item.status === "completed");
-    if (completed) {
-      await openJob(completed);
+    setJobsByAudioId((current) => ({ ...current, [selectedAudio.id]: nextJobs }));
+    if (nextJobs[0]) {
+      await openJob(nextJobs[0]);
     } else if (selectedJob?.id === job.id) {
       setSelectedJob(null);
       setSpeakers([]);
@@ -331,8 +483,14 @@ export function App() {
     setSelectedAudio(null);
     setSelectedJob(null);
     setJobs([]);
+    setJobsByAudioId((current) => {
+      const next = { ...current };
+      delete next[audio.id];
+      return next;
+    });
     setSpeakers([]);
     setSentences([]);
+    setSpeakerDirectory((items) => items.filter((entry) => entry.audioId !== audio.id));
     await refreshLibrary();
   }
 
@@ -417,7 +575,9 @@ export function App() {
         { duration: null },
       );
     }
-    setJobs(await api(`/api/audio/${audioOverride.id}/jobs`));
+    const nextJobs = await api(`/api/audio/${audioOverride.id}/jobs`);
+    setJobs(nextJobs);
+    setJobsByAudioId((current) => ({ ...current, [audioOverride.id]: nextJobs }));
     const wasStopped = stoppedJobIdsRef.current.has(resolvedJob.id) || resolvedJob.status === "deleted";
     if (wasStopped) {
       stoppedJobIdsRef.current.delete(resolvedJob.id);
@@ -461,6 +621,9 @@ export function App() {
     });
     setSpeakers((items) => applySpeakerRename(items, [], updated).speakers);
     setSentences((items) => applySpeakerRename([], items, updated).sentences);
+    setSpeakerDirectory((items) =>
+      items.map((entry) => (entry.id === updated.id ? { ...entry, displayName: updated.display_name } : entry)),
+    );
   }
 
   async function saveSettings(event) {
@@ -501,13 +664,19 @@ export function App() {
   }
 
   const speakerTurns = useMemo(() => groupSpeakerTurns(sentences), [sentences]);
-  const layoutMode = selectedAudio ? "layout layout--active" : "layout layout--library";
   const deferredSearchQuery = useDeferredValue(searchQuery);
+  const resolvedTheme = resolveThemeMode(themePreference);
   const filteredAudioItems = useMemo(() => {
     const query = deferredSearchQuery.trim().toLocaleLowerCase();
     if (!query) return audioItems;
     return audioItems.filter((audio) => audio.display_title.toLocaleLowerCase().includes(query));
   }, [audioItems, deferredSearchQuery]);
+  const handleSelectSection = React.useCallback((sectionId) => {
+    setActiveSection(sectionId);
+    if (isMobileViewport) {
+      setIsMobileLibraryOpen(false);
+    }
+  }, [isMobileViewport]);
 
   return (
     <main
@@ -517,33 +686,33 @@ export function App() {
       onDragLeave={handlePageDragLeave}
       onDrop={handleDrop}
     >
-      <AppHeader
-        isLibraryOpen={isMobileLibraryOpen}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        onToggleLibrary={() => setIsMobileLibraryOpen((current) => !current)}
-      />
-      {!isBackendAvailable && (
-        <div className="backend-warning" role="alert">
-          Backend service is unavailable. Start backend at <code>{API_BASE}</code>.
-        </div>
-      )}
       <ToastViewport toasts={toasts} onDismiss={removeToast} />
-
-      <section className={layoutMode}>
-        <LibraryPanel
-          audioItems={audioItems}
-          fileInputRef={fileInputRef}
-          filteredAudioItems={filteredAudioItems}
-          jobs={jobs}
-          selectedJob={selectedJob}
-          onFileInput={handleFileInput}
-          onOpenJob={openJob}
-          onProcessAudio={processSelectedAudio}
-          onSearch={setSearchQuery}
-          onSelectAudio={selectAudio}
-          searchQuery={searchQuery}
-          selectedAudio={selectedAudio}
-        />
+      <AppShell
+        activeSection={activeSection}
+        isBackendAvailable={isBackendAvailable}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onSelectSection={handleSelectSection}
+        onToggleTheme={toggleThemePreference}
+        resolvedTheme={resolvedTheme}
+        sidebar={(
+          <LibraryPanel
+            activeSection={activeSection}
+            audioItems={audioItems}
+            fileInputRef={fileInputRef}
+            filteredAudioItems={filteredAudioItems}
+            jobsByAudioId={jobsByAudioId}
+            selectedJob={selectedJob}
+            onFileInput={handleFileInput}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+            onSearch={setSearchQuery}
+            onSelectAudio={selectAudio}
+            searchQuery={searchQuery}
+            selectedAudio={selectedAudio}
+            speakerDirectory={speakerDirectory}
+            speakers={speakers}
+          />
+        )}
+      >
         <WorkspacePanel
           audioRef={audioRef}
           onDeleteAudio={deleteAudio}
@@ -564,9 +733,7 @@ export function App() {
           speakers={speakers}
           viewMode={viewMode}
         />
-      </section>
-      {isMobileLibraryOpen && <button type="button" className="mobile-library-backdrop" aria-label="Close library panel" onClick={() => setIsMobileLibraryOpen(false)} />}
-
+      </AppShell>
       {isDraggingUpload && (
         <div className="page-drop-overlay" aria-hidden="true">
           <div>Drop audio to import</div>
@@ -587,13 +754,69 @@ export function App() {
           jobSettings={jobSettings}
           modelOptions={modelOptions}
           onChangeJobSetting={updateJobSetting}
-          onClose={() => setIsSettingsOpen(false)}
+          onClose={closeSettings}
           onSaveSettings={saveSettings}
           settings={settings}
         />
       )}
     </main>
   );
+}
+
+function getStoredThemePreference() {
+  if (typeof window === "undefined") return "system";
+  const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+  return VALID_THEME_PREFERENCES.has(stored) ? stored : "system";
+}
+
+function resolveThemeMode(preference) {
+  if (preference === "light" || preference === "dark") return preference;
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return "light";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function applyThemePreference(preference) {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  const resolved = resolveThemeMode(preference);
+  root.dataset.theme = preference;
+  root.style.colorScheme = resolved;
+  root.classList.toggle("dark", resolved === "dark");
+}
+
+async function buildSpeakerDirectory(audioItems, jobsByAudioId) {
+  const completedJobs = audioItems.flatMap((audio) =>
+    (jobsByAudioId[audio.id] || [])
+      .filter((job) => job.status === "completed")
+      .map((job) => ({ audio, job })),
+  );
+
+  const speakerLists = await Promise.all(
+    completedJobs.map(async ({ audio, job }) => {
+      try {
+        const jobSpeakers = await api(`/api/jobs/${job.id}/speakers`);
+        return jobSpeakers.map((speaker) => ({
+          id: speaker.id,
+          audioId: audio.id,
+          audioTitle: audio.display_title,
+          displayName: speaker.display_name,
+          jobId: job.id,
+          sampleEnd: speaker.sample_end,
+          sampleStart: speaker.sample_start,
+          speakerKey: speaker.speaker_key,
+        }));
+      } catch {
+        return [];
+      }
+    }),
+  );
+
+  return speakerLists
+    .flat()
+    .sort((left, right) =>
+      left.displayName.localeCompare(right.displayName, undefined, { sensitivity: "base" })
+      || left.audioTitle.localeCompare(right.audioTitle, undefined, { sensitivity: "base" }),
+    );
 }
 
 const rootElement = document.getElementById("root");

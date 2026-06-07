@@ -77,6 +77,7 @@ A representative structure may look like this:
 ```text
 AGENTS.md
 ARCHITECTURE.md
+DESIGN.md
 docs/
 ├── design-docs/
 │   ├── index.md
@@ -97,7 +98,6 @@ docs/
 │   ├── nixpacks-llms.txt
 │   ├── uv-llms.txt
 │   └── ...
-├── DESIGN.md
 ├── FRONTEND.md
 ├── PLANS.md
 ├── PRODUCT_SENSE.md
@@ -107,6 +107,8 @@ docs/
 ```
 
 This layout is illustrative, not mandatory in every case. The repository may omit or remove files and folders that are not applicable to the project.
+
+Root-level `DESIGN.md`, when present, is a special frontend design-system contract rather than a general repository design document. It exists at the repository root so design agents and design lint tools can discover it consistently.
 
 ---
 
@@ -182,9 +184,7 @@ Each specification should describe a bounded product area, feature, or workflow.
 
 ## `docs/references/`
 
-This directory contains curated reference material intended to support implementation work.
-
-Reference material should be concise, relevant, and retrieval-friendly. It should not become a dumping ground for arbitrary external documentation.
+This directory contains curated reference material intended to support implementation work. Reference material should be concise, relevant, and retrieval-friendly. It should not become a dumping ground for arbitrary external documentation.
 
 ### `docs/references/design-system-reference-llms.txt`
 
@@ -210,9 +210,9 @@ If a reference file is not used, is stale, or is irrelevant to the project, it s
 
 The following files under `docs/` are intended as stable, domain-level guidance documents.
 
-## `docs/DESIGN.md`
+## `DESIGN.md`
 
-Defines high-level design standards, conventions, and decision principles for the repository.
+Defines frontend-only visual design standards, styling tokens, UI composition rules, and interaction styling guidance.
 
 ## `docs/FRONTEND.md`
 

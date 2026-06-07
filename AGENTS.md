@@ -16,6 +16,7 @@ The implementation target is:
 ## Documentation Entry Points
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): top-level system architecture, subsystem boundaries, and dependency direction.
+- [DESIGN.md](DESIGN.md): frontend-only visual design, styling tokens, and UI composition guidance.
 - [docs/product-specs/index.md](docs/product-specs/index.md): product behavior requirements.
 - [docs/design-docs/index.md](docs/design-docs/index.md): design decisions, rationale, and implementation constraints.
 - [docs/CODE-DEV-REVIEW-ORCHESTRATION.md](docs/CODE-DEV-REVIEW-ORCHESTRATION.md): orchestration workflow for multi-agent implementation cycles.

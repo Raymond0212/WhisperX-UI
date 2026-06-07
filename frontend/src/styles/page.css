@@ -1,28 +1,38 @@
-.app-shell {
-  display: flex;
-  flex-direction: column;
-  height: 100dvh;
-  isolation: isolate;
-  min-height: 0;
-  overflow: hidden;
-  position: relative;
-}
-
-.mobile-library-backdrop {
-  display: none;
-}
-
+.empty-state,
+.error,
 .backend-warning {
-  background: rgba(169, 75, 69, 0.12);
-  border: 1px solid rgba(169, 75, 69, 0.34);
-  border-radius: 12px;
-  color: var(--danger);
-  font-size: 0.92rem;
-  margin: 0.6rem 1.25rem 0;
-  padding: 0.6rem 0.8rem;
+  margin: 1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--muted-foreground);
+  display: grid;
+  gap: 0.25rem;
+  padding: 1rem;
 }
 
-.backend-warning code {
-  color: inherit;
-  font-weight: 700;
+.journey-empty {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--muted-foreground);
+  display: flex;
+  font-size: 1.05rem;
+  font-weight: 600;
+  height: 100%;
+  justify-content: center;
+  margin: 0;
+  min-height: 0;
+  min-width: 0;
+  padding: 2rem;
+  width: 100%;
+}
+
+.empty-state strong {
+  color: var(--foreground);
+}
+
+.error,
+.backend-warning {
+  color: var(--destructive);
 }

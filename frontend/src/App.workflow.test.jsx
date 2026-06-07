@@ -262,6 +262,27 @@ function createApiMock({ settingsOverrides = {}, jobPollsBeforeComplete = 2 } = 
 
 beforeEach(() => {
   cleanup();
+  vi.stubGlobal("matchMedia", vi.fn().mockImplementation(() => ({
+    matches: false,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+  })));
+  const storage = new Map();
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: vi.fn((key) => (storage.has(key) ? storage.get(key) : null)),
+      setItem: vi.fn((key, value) => storage.set(key, String(value))),
+      removeItem: vi.fn((key) => storage.delete(key)),
+      clear: vi.fn(() => storage.clear()),
+    },
+  });
+  window.localStorage.clear();
+  document.documentElement.className = "";
+  document.documentElement.removeAttribute("data-theme");
+  document.documentElement.style.colorScheme = "";
 });
 
 afterEach(() => {
@@ -300,6 +321,15 @@ test("drives the upload, process, review, edit, export, failed job, and delete w
   const uploadRequest = requests.find((request) => request.method === "POST" && request.path === "/api/audio");
   expect(uploadRequest.options.body.get("file").name).toBe("meeting.m4a");
   expect(uploadRequest.options.body.get("display_title")).toBe("Demo upload");
+  expect(await screen.findByText("Not Processed Yet")).not.toBeNull();
+  const jobRequestsBeforeRawClick = requests.filter((request) => request.method === "POST" && request.path === "/api/jobs").length;
+  fireEvent.click(screen.getByRole("button", { name: /demo upload not started/i }));
+  expect(requests.filter((request) => request.method === "POST" && request.path === "/api/jobs").length).toBe(
+    jobRequestsBeforeRawClick,
+  );
+  fireEvent.click(screen.getByRole("tab", { name: /speaker turns/i }));
+  expect(await screen.findByText("Not Processed Yet")).not.toBeNull();
+  fireEvent.click(screen.getByRole("tab", { name: /sentences/i }));
 
   fireEvent.click(screen.getByRole("button", { name: /open settings/i }));
   fireEvent.change(screen.getByLabelText("Diarization/HF token"), {
@@ -339,7 +369,7 @@ test("drives the upload, process, review, edit, export, failed job, and delete w
   confirm.mockReturnValueOnce(false);
   fireEvent.click(sentenceExport);
   expect(confirm).toHaveBeenCalledWith("Download the sentence based VTT export?");
-  fireEvent.click(screen.getByRole("button", { name: /speaker settings/i }));
+  fireEvent.click(screen.getByRole("tab", { name: /speakers/i }));
   const player = document.querySelector("audio");
   fireEvent.click(screen.getByRole("button", { name: /play sample for speaker_00/i }));
   expect(player.currentTime).toBe(0);
@@ -348,6 +378,7 @@ test("drives the upload, process, review, edit, export, failed job, and delete w
   fireEvent.timeUpdate(player);
   expect(pause).toHaveBeenCalledTimes(1);
 
+  fireEvent.click(screen.getByRole("tab", { name: /sentences/i }));
   fireEvent.click(screen.getAllByRole("button", { name: /play sentence sentence-1/i })[0]);
   expect(player.currentTime).toBe(1);
   expect(play).toHaveBeenCalledTimes(2);
@@ -376,7 +407,7 @@ test("drives the upload, process, review, edit, export, failed job, and delete w
     expect(JSON.parse(sentencePatch.options.body)).toEqual({ current_text: "Hello edited." });
   });
 
-  fireEvent.click(screen.getByRole("button", { name: /speaker turns/i }));
+  fireEvent.click(screen.getByRole("tab", { name: /speaker turns/i }));
   const turnSentenceButton = screen.getAllByRole("button", { name: /play sentence sentence-1/i }).at(-1);
   fireEvent.click(turnSentenceButton);
   expect(player.currentTime).toBe(1);
@@ -533,4 +564,21 @@ test("uses stored backend HF token without sending token from frontend payloads"
   });
   const jobRequest = requests.find((request) => request.method === "POST" && request.path === "/api/jobs");
   expect(JSON.parse(jobRequest.options.body).settings).toBeUndefined();
+});
+
+test("defaults to system theme and lets the user switch to dark mode", async () => {
+  const { fetchMock } = createApiMock();
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(<App />);
+
+  expect(await screen.findByText("Broken clip")).not.toBeNull();
+  expect(document.documentElement.dataset.theme).toBe("system");
+  expect(document.documentElement.classList.contains("dark")).toBe(false);
+
+  fireEvent.click(screen.getByRole("button", { name: /toggle theme/i }));
+
+  expect(document.documentElement.dataset.theme).toBe("dark");
+  expect(document.documentElement.classList.contains("dark")).toBe(true);
+  expect(window.localStorage.getItem("whisperx-ui-theme")).toBe("dark");
 });
