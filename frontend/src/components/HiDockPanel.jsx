@@ -23,7 +23,7 @@ const ACTION_GROUPS = [
   {
     title: "Session",
     actions: [
-      { label: "Connect", key: "connect", icon: Usb, variant: "default", requiresUsb: true, disabledWhenConnected: true },
+      { label: "Connect", key: "connect", icon: Usb, variant: "default", requiresUsb: true },
       { label: "Disconnect", key: "disconnect", variant: "outline", requiresConnection: true },
       { label: "List Files", key: "listFiles", icon: RefreshCw, variant: "outline", requiresConnection: true },
       { label: "Download Selected", key: "downloadSelected", icon: Download, requiresConnection: true, requiresSelection: true },

@@ -98,7 +98,7 @@ export function LibraryPanel({
               type="button"
               variant="secondary"
               size="sm"
-              disabled={hidockManager?.busy || !hidockManager?.capability?.canUsbOperate || hidockManager?.connected}
+              disabled={hidockManager?.busy || !hidockManager?.capability?.canUsbOperate}
               onClick={() => {
                 void hidockManager?.actions?.connect?.();
               }}
