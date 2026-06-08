@@ -231,3 +231,129 @@
   color: var(--muted-foreground);
   font-size: 0.82rem;
 }
+
+.hidock-title-block {
+  display: grid;
+  gap: 0.16rem;
+}
+
+.hidock-title-block h1,
+.hidock-title-block p {
+  margin: 0;
+}
+
+.hidock-subtitle {
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+}
+
+.hidock-warning {
+  align-items: start;
+  background: color-mix(in oklch, var(--destructive), transparent 92%);
+  border: 1px solid color-mix(in oklch, var(--destructive), var(--border) 65%);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 0.8rem 0.9rem;
+}
+
+.hidock-warning p,
+.hidock-warning strong {
+  margin: 0;
+}
+
+.hidock-warning p {
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+  margin-top: 0.12rem;
+}
+
+.hidock-summary-grid {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.hidock-summary-card [data-slot="card-content"] {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.8rem 0.9rem;
+}
+
+.hidock-summary-card small {
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+}
+
+.hidock-action-groups {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.hidock-action-card [data-slot="card-content"] {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.85rem 0.95rem;
+}
+
+.hidock-action-card__header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.hidock-action-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
+.hidock-detail-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
+}
+
+.hidock-selected-card [data-slot="card-content"],
+.hidock-details-card [data-slot="card-content"] {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.85rem 0.95rem;
+}
+
+.hidock-selected-card__header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.hidock-selected-meta {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+}
+
+.hidock-selected-meta dt {
+  color: var(--muted-foreground);
+  font-size: 0.73rem;
+}
+
+.hidock-selected-meta dd {
+  margin: 0.12rem 0 0;
+}
+
+.hidock-details-output {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  margin: 0;
+  max-height: 24rem;
+  min-height: 14rem;
+  overflow: auto;
+  padding: 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

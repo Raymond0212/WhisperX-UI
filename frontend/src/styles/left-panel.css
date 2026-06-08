@@ -143,6 +143,36 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+.tree-node--hidock {
+  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.tree-node--hidock input[type="checkbox"] {
+  accent-color: var(--primary);
+  margin: 0;
+}
+
+.tree-node-buttonlike {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  display: grid;
+  gap: 0.48rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.tree-node-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 button.tree-node,
 .library-title-button,
 .library-job-pill,
@@ -210,6 +240,12 @@ button.tree-node,
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+}
+
+.hidock-sidebar-toolbar {
+  display: grid;
+  gap: 0.45rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .library {

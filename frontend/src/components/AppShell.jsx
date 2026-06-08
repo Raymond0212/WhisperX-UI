@@ -1,5 +1,5 @@
 import React from "react";
-import { AudioLines, BriefcaseBusiness, Library, Moon, Settings, Sun, UsersRound } from "lucide-react";
+import { AudioLines, BriefcaseBusiness, HardDrive, Library, Moon, Settings, Sun, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { API_BASE } from "../api.js";
 
@@ -7,6 +7,7 @@ const SECTIONS = [
   { id: "library", label: "Library", icon: Library },
   { id: "jobs", label: "Jobs", icon: BriefcaseBusiness },
   { id: "speakers", label: "Speakers", icon: UsersRound },
+  { id: "hidock", label: "HiDock", icon: HardDrive },
 ];
 
 export function AppShell({

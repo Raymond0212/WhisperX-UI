@@ -9,12 +9,14 @@ The frontend is a Vite React browser UI designed for local use and future Electr
 The primary layout is a rail, secondary sidebar, and main pane hierarchy:
 
 - Section rail: leftmost icon-and-label vault for Library, Jobs, Speakers, and Settings.
+- Section rail: leftmost icon-and-label vault for Library, Jobs, Speakers, HiDock, and Settings.
 - Secondary sidebar: derived tree/sidebar for the active section, using existing audio, job, speaker, and settings data without persisted folders.
 - Main pane: detailed workspace for audio playback, processing controls, transcript review, editing, speaker rename flows, exports, and modal dialogs.
 
 ## Main Screens
 
 - Library: uploaded audio list, editable title, upload date, duration, job status, delete action, and open action.
+- HiDock: WebUSB-backed device manager with file listing, device actions, status/progress, download, and direct import into the normal upload modal.
 - Upload: file select or drag-and-drop, selected filename, title editing, model configuration, and one-click process.
 - Processing: non-blocking progress state with subtle stage text/progress strip plus final success or failure result.
 - Transcript Review: audio player, speaker samples, speaker renaming, sentence view, speaker-turn view, transcript editing, sentence playback, and VTT export.
@@ -43,6 +45,7 @@ Current implementation covers the core upload/library/workspace/settings flow wi
 - While polling `GET /api/jobs/{job_id}`, render progress from `progress_stage`, `progress_percent`, and `progress_message` in a non-blocking way that blends into the workspace (no modal/overlay).
 - When the selected job is `queued` or `processing`, the primary Process/Reprocess button should render as Stop. Stop should call `DELETE /api/jobs/{job_id}`, clear the active progress/transcript state for that deleted job, refresh library/job lists, and leave other queued jobs under backend scheduler control.
 - Hide soft-deleted audio from the normal library view.
+- HiDock imports must reuse the existing upload modal and normalize `.hda` filenames to a supported audio suffix before posting to `/api/audio`.
 
 ## Electron Compatibility
 

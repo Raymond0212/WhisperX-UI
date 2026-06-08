@@ -56,6 +56,8 @@ User opens app
 | AU-006 | User can edit the display title of an uploaded audio file. |
 | AU-007 | Each upload is treated as a separate audio item.           |
 | AU-008 | Audio files are playable in the browser after upload.      |
+| AU-009 | HiDock imports reuse the upload review modal.              |
+| AU-010 | HiDock `.hda` imports are normalized to a supported audio suffix before upload. |
 
 Supported audio extensions: `.aac`, `.aif`, `.aifc`, `.aiff`, `.amr`, `.caf`, `.flac`, `.m4a`, `.mka`, `.mp3`, `.mpga`, `.mpeg`, `.oga`, `.ogg`, `.opus`, `.wav`, `.wave`, `.webm`.
 

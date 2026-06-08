@@ -1,11 +1,13 @@
 import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { AppShell } from "./components/AppShell.jsx";
+import { HiDockPanel } from "./components/HiDockPanel.jsx";
 import { LibraryPanel } from "./components/LibraryPanel.jsx";
 import { SettingsModal } from "./components/SettingsModal.jsx";
 import { ToastViewport } from "./components/ToastViewport.jsx";
 import { UploadModal } from "./components/UploadModal.jsx";
 import { WorkspacePanel } from "./components/WorkspacePanel.jsx";
+import { useHiDockManager } from "./features/hidock/useHiDockManager.js";
 import { API_BASE, api } from "./api.js";
 import {
   DEFAULT_JOB_SETTINGS,
@@ -34,6 +36,7 @@ const THEME_STORAGE_KEY = "whisperx-ui-theme";
 const VALID_THEME_PREFERENCES = new Set(["system", "light", "dark"]);
 
 export function App() {
+  const hidockManager = useHiDockManager();
   const [audioItems, setAudioItems] = useState([]);
   const [selectedAudio, setSelectedAudio] = useState(null);
   const [selectedJob, setSelectedJob] = useState(null);
@@ -341,8 +344,7 @@ export function App() {
 
   function handleFileInput(event) {
     const file = event.currentTarget.files[0] || null;
-    setSelectedFile(file);
-    setIsUploadModalOpen(Boolean(file));
+    openUploadModalForFile(file);
   }
 
   function handleDrop(event) {
@@ -351,8 +353,12 @@ export function App() {
     setIsDraggingUpload(false);
     const file = event.dataTransfer.files[0];
     if (!file) return;
+    openUploadModalForFile(file);
+  }
+
+  function openUploadModalForFile(file) {
     setSelectedFile(file);
-    setIsUploadModalOpen(true);
+    setIsUploadModalOpen(Boolean(file));
   }
 
   function handlePageDragEnter(event) {
@@ -691,6 +697,20 @@ export function App() {
     }
   }, [closeMobilePane, isMobileViewport]);
 
+  const selectHiDockFile = React.useCallback((filename, checked = true) => {
+    if (isMobileViewport) {
+      setIsMobileLibraryOpen(true);
+    }
+    hidockManager.actions.selectFile(filename, checked);
+  }, [hidockManager.actions, isMobileViewport]);
+
+  const importHiDockSelection = React.useCallback(async () => {
+    const file = await hidockManager.actions.importSelectedFile();
+    if (file) {
+      openUploadModalForFile(file);
+    }
+  }, [hidockManager.actions]);
+
   return (
     <main
       className={`app-shell ${isDraggingUpload ? "is-page-dragging" : ""} ${isMobileLibraryOpen ? "mobile-library-open" : ""}`}
@@ -716,12 +736,15 @@ export function App() {
             audioItems={audioItems}
             fileInputRef={fileInputRef}
             filteredAudioItems={filteredAudioItems}
+            hidockManager={hidockManager}
             jobsByAudioId={jobsByAudioId}
             selectedJob={selectedJob}
             onFileInput={handleFileInput}
+            onImportHiDockSelection={importHiDockSelection}
             onOpenSettings={() => setIsSettingsOpen(true)}
             onSearch={setSearchQuery}
             onSelectAudio={selectAudio}
+            onSelectHiDockFile={selectHiDockFile}
             searchQuery={searchQuery}
             selectedAudio={selectedAudio}
             speakerDirectory={speakerDirectory}
@@ -729,26 +752,30 @@ export function App() {
           />
         )}
       >
-        <WorkspacePanel
-          audioRef={audioRef}
-          onDeleteAudio={deleteAudio}
-          onDeleteTranscript={deleteTranscript}
-          onPlay={playRange}
-          onProcessAudio={processSelectedAudio}
-          onStopJob={stopJob}
-          onUpdateRecordingSettings={updateRecordingSettings}
-          onRenameSpeaker={renameSpeaker}
-          onUpdateSentence={updateSentence}
-          onUpdateTitle={updateTitle}
-          selectedAudio={selectedAudio}
-          selectedJob={selectedJob}
-          sentences={sentences}
-          setSelectedAudio={setSelectedAudio}
-          setViewMode={setViewMode}
-          speakerTurns={speakerTurns}
-          speakers={speakers}
-          viewMode={viewMode}
-        />
+        {activeSection === "hidock" ? (
+          <HiDockPanel manager={hidockManager} onImportAudio={openUploadModalForFile} />
+        ) : (
+          <WorkspacePanel
+            audioRef={audioRef}
+            onDeleteAudio={deleteAudio}
+            onDeleteTranscript={deleteTranscript}
+            onPlay={playRange}
+            onProcessAudio={processSelectedAudio}
+            onStopJob={stopJob}
+            onUpdateRecordingSettings={updateRecordingSettings}
+            onRenameSpeaker={renameSpeaker}
+            onUpdateSentence={updateSentence}
+            onUpdateTitle={updateTitle}
+            selectedAudio={selectedAudio}
+            selectedJob={selectedJob}
+            sentences={sentences}
+            setSelectedAudio={setSelectedAudio}
+            setViewMode={setViewMode}
+            speakerTurns={speakerTurns}
+            speakers={speakers}
+            viewMode={viewMode}
+          />
+        )}
       </AppShell>
       {isDraggingUpload && (
         <div className="page-drop-overlay" aria-hidden="true">

@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, ChevronRight, Circle, FileAudio, Folder, LoaderCircle, Plus, Search } from "lucide-react";
+import { Check, ChevronRight, Circle, FileAudio, Folder, HardDrive, LoaderCircle, Plus, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,11 +11,14 @@ export function LibraryPanel({
   audioItems,
   fileInputRef,
   filteredAudioItems,
+  hidockManager,
   jobsByAudioId = {},
   selectedJob,
   onFileInput,
+  onImportHiDockSelection,
   onSearch,
   onSelectAudio,
+  onSelectHiDockFile,
   searchQuery,
   selectedAudio,
   speakerDirectory = [],
@@ -77,6 +80,92 @@ export function LibraryPanel({
               </button>
             );
           }) : <p className="tree-empty">No detected speakers match your search.</p>}
+        </TreeGroup>
+      </TreeFrame>
+    );
+  }
+
+  if (activeSection === "hidock") {
+    const hidockFiles = hidockManager?.files || [];
+    const selectedFilename = hidockManager?.selectedFilename || null;
+    const canImport = Boolean(hidockManager?.selectedFile);
+
+    return (
+      <TreeFrame title="HiDock" subtitle="Device recordings">
+        <section className="upload-panel" aria-label="HiDock controls">
+          <div className="hidock-sidebar-toolbar">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={hidockManager?.busy || !hidockManager?.capability?.canUsbOperate || hidockManager?.connected}
+              onClick={() => {
+                void hidockManager?.actions?.connect?.();
+              }}
+            >
+              Connect
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={hidockManager?.busy || !hidockManager?.connected}
+              onClick={() => {
+                void hidockManager?.actions?.listFiles?.();
+              }}
+            >
+              Refresh
+            </Button>
+          </div>
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            disabled={hidockManager?.busy || !canImport}
+            onClick={() => {
+              void onImportHiDockSelection?.();
+            }}
+          >
+            Import Selected
+          </Button>
+        </section>
+        <TreeGroup label="HiDock files">
+          {hidockFiles.length > 0 ? (
+            <div className="library-list">
+              {hidockFiles.map((file) => {
+                const isActive = selectedFilename === file.filename;
+                return (
+                  <div
+                    key={file.filename}
+                    className={`tree-node tree-node--hidock ${isActive ? "active" : ""}`}
+                    aria-current={isActive ? "page" : undefined}
+                  >
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${file.filename}`}
+                      checked={isActive}
+                      onChange={(event) => onSelectHiDockFile?.(file.filename, event.target.checked)}
+                    />
+                    <button
+                      type="button"
+                      className="tree-node-buttonlike"
+                      onClick={() => onSelectHiDockFile?.(file.filename, true)}
+                    >
+                      <span className="tree-node-icon"><HardDrive aria-hidden="true" /></span>
+                      <span className="tree-node-copy">
+                        <span className="tree-node-name">{file.filename}</span>
+                        <span className="tree-node-subtitle">{file.createdAtRaw} · {file.durationLabel}</span>
+                      </span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="tree-empty">
+              {hidockManager?.connected ? "No HiDock files loaded yet. Use Refresh or List Files." : "Connect a HiDock device to load recordings."}
+            </p>
+          )}
         </TreeGroup>
       </TreeFrame>
     );
