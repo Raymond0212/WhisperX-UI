@@ -1,7 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ChevronDown, Download, Play } from "lucide-react";
+import { Download, Play } from "lucide-react";
 import { API_BASE } from "../api.js";
 import { formatTime, runtimeDeviceIndicator } from "../jobUtils.js";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export function TranscriptReview({
   job,
@@ -16,14 +21,12 @@ export function TranscriptReview({
   onUpdateRecordingSettings,
   onUpdateSentence,
 }) {
-  const [isSpeakerPanelOpen, setIsSpeakerPanelOpen] = useState(false);
   const isMobile = useIsMobile();
-  const isProcessing = job.status === "queued" || job.status === "processing";
-  const isCompleted = job.status === "completed";
-  const progressPercent = Number.isFinite(Number(job.progress_percent))
-    ? Math.max(0, Math.min(100, Number(job.progress_percent)))
-    : null;
-  const progressLabel = job.progress_message || (job.status === "queued" ? "Queued" : "Processing audio");
+  const isProcessing = job?.status === "queued" || job?.status === "processing" || job?.status === "running";
+  const isCompleted = job?.status === "completed";
+  const notProcessedTitle = "Not Processed Yet";
+  const progressPercent = getProgressPercent(job);
+  const progressLabel = job?.progress_message || (job?.status === "queued" ? "Queued" : "Processing audio");
   const deviceIndicator = runtimeDeviceIndicator(job);
   const exportView = viewMode === "sentences" ? "sentences" : "speaker-turns";
   const exportLabel = viewMode === "sentences" ? "Download Sentence VTT" : "Download Speaker Turn VTT";
@@ -31,109 +34,165 @@ export function TranscriptReview({
     viewMode === "sentences"
       ? "Download the sentence based VTT export?"
       : "Download the speaker turn based VTT export?";
-  const exportUrl = `${API_BASE}/api/jobs/${job.id}/export.vtt?view=${exportView}`;
+  const exportUrl = job ? `${API_BASE}/api/jobs/${job.id}/export.vtt?view=${exportView}` : "";
+  const canExport = isCompleted && (viewMode === "sentences" || viewMode === "turns");
+
   return (
-    <div className="review">
-      <section className={`speaker-panel ${isSpeakerPanelOpen ? "open" : ""}`}>
-        <button
-          type="button"
-          className="speaker-panel-toggle"
-          aria-expanded={isSpeakerPanelOpen}
-          onClick={() => setIsSpeakerPanelOpen((current) => !current)}
-        >
-          <span>Speaker Settings</span>
-          <ChevronDown size={17} aria-hidden="true" />
-        </button>
-        {isSpeakerPanelOpen && (
-          <div className="speaker-list">
-            <RecordingDiarizationSettings selectedAudio={selectedAudio} onUpdateRecordingSettings={onUpdateRecordingSettings} />
-            {speakers.map((speaker) => (
-              <SpeakerLabelRow key={speaker.id} speaker={speaker} onPlay={onPlay} onRenameSpeaker={onRenameSpeaker} />
-            ))}
+    <Card className="review-card">
+      <Tabs value={viewMode} onValueChange={setViewMode} className="review-tabs">
+        <CardHeader className="review-card-header">
+          <CardTitle className="sr-only">Transcript workspace</CardTitle>
+          <div className="review-tabs-scroll">
+            <TabsList aria-label="Run workspace tabs" className="review-tabs-list">
+              <TabsTrigger value="sentences" onClick={() => setViewMode("sentences")}>Sentences</TabsTrigger>
+              <TabsTrigger value="turns" onClick={() => setViewMode("turns")}>Speaker turns</TabsTrigger>
+              <TabsTrigger value="speakers" onClick={() => setViewMode("speakers")}>Speakers</TabsTrigger>
+              <TabsTrigger value="settings" onClick={() => setViewMode("settings")}>Run settings</TabsTrigger>
+            </TabsList>
           </div>
-        )}
-      </section>
-
-      <div className="review-header">
-        <div className="segmented" role="group" aria-label="Transcript view">
-          <button
-            className={viewMode === "sentences" ? "active" : ""}
-            aria-pressed={viewMode === "sentences"}
-            onClick={() => setViewMode("sentences")}
-          >
-            Sentences
-          </button>
-          <button
-            className={viewMode === "turns" ? "active" : ""}
-            aria-pressed={viewMode === "turns"}
-            onClick={() => setViewMode("turns")}
-          >
-            Speaker turns
-          </button>
-        </div>
-        <button
-          type="button"
-          className="export-link"
-          aria-label={exportLabel}
-          disabled={!isCompleted}
-          data-export-url={exportUrl}
-          data-export-view={exportView}
-          onClick={() => {
-            if (!isCompleted) return;
-            if (window.confirm(exportConfirmation)) {
-              window.location.assign(exportUrl);
-            }
-          }}
-        >
-          <Download size={16} />
-          {!isMobile && exportLabel}
-        </button>
-      </div>
-
-      <div className="review-body">
-        {isProcessing && (
-          <section className="transcription-progress" aria-label="Transcription progress">
-            <div className="transcription-progress-meta">
-              <strong>{progressLabel}</strong>
-              <span className="transcription-progress-status">
-                {deviceIndicator && <span className="runtime-device-pill">{deviceIndicator}</span>}
-                <span>{progressPercent === null ? "" : `${Math.round(progressPercent)}%`}</span>
-              </span>
-            </div>
-            <div className="transcription-progress-track" aria-hidden="true">
-              <div
-                className="transcription-progress-fill"
-                style={{ width: `${progressPercent === null ? 0 : progressPercent}%` }}
+          <CardAction>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label={exportLabel}
+              disabled={!canExport}
+              data-export-url={exportUrl}
+              data-export-view={exportView}
+              onClick={() => {
+                if (!canExport) return;
+                if (window.confirm(exportConfirmation)) {
+                  window.location.assign(exportUrl);
+                }
+              }}
+            >
+              <Download data-icon="inline-start" />
+              {!isMobile && "VTT"}
+            </Button>
+          </CardAction>
+        </CardHeader>
+        <CardContent className="review-card-content">
+          <TabsContent value="sentences" className="review-body">
+            {renderRunContent({
+              isProcessing,
+              isCompleted,
+              progressLabel,
+              progressPercent,
+              deviceIndicator,
+              emptyTitle: notProcessedTitle,
+              completedContent: (
+                <SentenceList
+                  sentences={sentences}
+                  speakers={speakers}
+                  onPlay={onPlay}
+                  onRenameSpeaker={onRenameSpeaker}
+                  onUpdateSentence={onUpdateSentence}
+                />
+              ),
+            })}
+          </TabsContent>
+          <TabsContent value="turns" className="review-body">
+            {renderRunContent({
+              isProcessing,
+              isCompleted,
+              progressLabel,
+              progressPercent,
+              deviceIndicator,
+              emptyTitle: notProcessedTitle,
+              completedContent: (
+                <SpeakerTurnList
+                  speakerTurns={speakerTurns}
+                  speakers={speakers}
+                  onPlay={onPlay}
+                  onRenameSpeaker={onRenameSpeaker}
+                  onUpdateSentence={onUpdateSentence}
+                />
+              ),
+            })}
+          </TabsContent>
+          <TabsContent value="speakers" className="review-body">
+            {renderRunContent({
+              isProcessing,
+              isCompleted,
+              progressLabel,
+              progressPercent,
+              deviceIndicator,
+              emptyTitle: "Speakers are not detected yet.",
+              completedContent: <SpeakerList speakers={speakers} onPlay={onPlay} onRenameSpeaker={onRenameSpeaker} />,
+            })}
+          </TabsContent>
+          <TabsContent value="settings" className="review-body">
+            <div className="run-settings-tab">
+              <div>
+                <h3>Run settings</h3>
+                <p>{job ? "Settings are locked for this run." : "Configure diarization before starting transcription."}</p>
+              </div>
+              <RecordingDiarizationSettings
+                selectedAudio={selectedAudio}
+                onUpdateRecordingSettings={onUpdateRecordingSettings}
+                disabled={Boolean(job)}
               />
             </div>
-          </section>
-        )}
+          </TabsContent>
+        </CardContent>
+      </Tabs>
+    </Card>
+  );
+}
 
-        {isCompleted && viewMode === "sentences" ? (
-          <SentenceList
-            sentences={sentences}
-            speakers={speakers}
-            onPlay={onPlay}
-            onRenameSpeaker={onRenameSpeaker}
-            onUpdateSentence={onUpdateSentence}
-          />
-        ) : null}
+function renderRunContent({ isProcessing, isCompleted, progressLabel, progressPercent, deviceIndicator, emptyTitle, completedContent }) {
+  if (isProcessing) {
+    return <TranscriptionProgress progressLabel={progressLabel} progressPercent={progressPercent} deviceIndicator={deviceIndicator} />;
+  }
+  if (isCompleted) return completedContent;
+  return <TabEmpty title={emptyTitle} />;
+}
 
-        {isCompleted && viewMode !== "sentences" ? (
-          <SpeakerTurnList
-            speakerTurns={speakerTurns}
-            speakers={speakers}
-            onPlay={onPlay}
-            onRenameSpeaker={onRenameSpeaker}
-            onUpdateSentence={onUpdateSentence}
-          />
-        ) : null}
+function TranscriptionProgress({ progressLabel, progressPercent, deviceIndicator }) {
+  const value = progressPercent === null ? 0 : progressPercent;
+  return (
+    <section className="transcription-progress" aria-label="Transcription progress">
+      <div className="transcription-progress-meta">
+        <strong>{progressLabel}</strong>
+        <span className="transcription-progress-status">
+          {deviceIndicator && <Badge variant="outline">{deviceIndicator}</Badge>}
+          <span>{progressPercent === null ? "" : `${Math.round(progressPercent)}%`}</span>
+        </span>
       </div>
+      <Progress value={value} />
+    </section>
+  );
+}
+
+function TabEmpty({ title }) {
+  return (
+    <div className="tab-empty">
+      <strong>{title}</strong>
+      <span>Start or select a run to populate this tab.</span>
     </div>
   );
 }
 
-function RecordingDiarizationSettings({ selectedAudio, onUpdateRecordingSettings }) {
+function SpeakerList({ speakers, onPlay, onRenameSpeaker }) {
+  if (speakers.length === 0) {
+    return <TabEmpty title="No speakers detected." />;
+  }
+  return (
+    <div className="speaker-list speaker-list--tab">
+      {speakers.map((speaker) => (
+        <SpeakerLabelRow key={speaker.id} speaker={speaker} onPlay={onPlay} onRenameSpeaker={onRenameSpeaker} />
+      ))}
+    </div>
+  );
+}
+
+function getProgressPercent(job) {
+  if (!job) return null;
+  const progress = Number(job.progress_percent);
+  return Number.isFinite(progress) ? Math.max(0, Math.min(100, progress)) : null;
+}
+
+function RecordingDiarizationSettings({ selectedAudio, onUpdateRecordingSettings, disabled = false }) {
   const [values, setValues] = useState({
     speaker_count: selectedAudio.speaker_count ?? "",
     min_speakers: selectedAudio.min_speakers ?? "",
@@ -149,6 +208,7 @@ function RecordingDiarizationSettings({ selectedAudio, onUpdateRecordingSettings
   }, [selectedAudio.id, selectedAudio.speaker_count, selectedAudio.min_speakers, selectedAudio.max_speakers]);
 
   function handleBlur() {
+    if (disabled) return;
     onUpdateRecordingSettings(selectedAudio, values);
   }
 
@@ -160,6 +220,7 @@ function RecordingDiarizationSettings({ selectedAudio, onUpdateRecordingSettings
           type="number"
           min="1"
           max="20"
+          disabled={disabled}
           value={values.speaker_count}
           onChange={(event) => setValues((current) => ({ ...current, speaker_count: event.target.value }))}
           onBlur={handleBlur}
@@ -171,6 +232,7 @@ function RecordingDiarizationSettings({ selectedAudio, onUpdateRecordingSettings
           type="number"
           min="1"
           max="20"
+          disabled={disabled}
           value={values.min_speakers}
           onChange={(event) => setValues((current) => ({ ...current, min_speakers: event.target.value }))}
           onBlur={handleBlur}
@@ -182,6 +244,7 @@ function RecordingDiarizationSettings({ selectedAudio, onUpdateRecordingSettings
           type="number"
           min="1"
           max="20"
+          disabled={disabled}
           value={values.max_speakers}
           onChange={(event) => setValues((current) => ({ ...current, max_speakers: event.target.value }))}
           onBlur={handleBlur}
@@ -250,7 +313,7 @@ function SpeakerLabelRow({ speaker, onPlay, onRenameSpeaker }) {
       {isEditing ? (
         <span
           ref={editorRef}
-          className="speaker-name speaker-name--editing"
+          className="speaker-name inline-editing"
           role="textbox"
           contentEditable
           suppressContentEditableWarning
@@ -343,7 +406,7 @@ function EditableTurnSentence({ sentence, isEditing, onEdit, onPlay, onCancel, o
     return (
       <span
         ref={editorRef}
-        className="turn-sentence turn-sentence--editing"
+        className="turn-sentence inline-editing"
         role="textbox"
         contentEditable
         suppressContentEditableWarning
@@ -458,7 +521,7 @@ function InlineSpeakerName({ speaker, fallbackName, onRenameSpeaker }) {
     return (
       <span
         ref={editorRef}
-        className="speaker-name speaker-name--editing"
+        className="speaker-name inline-editing"
         role="textbox"
         contentEditable
         suppressContentEditableWarning
@@ -471,7 +534,12 @@ function InlineSpeakerName({ speaker, fallbackName, onRenameSpeaker }) {
   }
 
   return (
-    <button type="button" className="speaker-name inline-speaker-name" onClick={() => setIsEditing(true)}>
+    <button
+      type="button"
+      className="speaker-name inline-speaker-name"
+      aria-label={`Edit display name for ${speaker?.speaker_key || displayName}`}
+      onClick={() => setIsEditing(true)}
+    >
       {displayName}
     </button>
   );

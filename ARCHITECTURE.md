@@ -7,7 +7,7 @@ This document is the top-level architecture map for WhisperX UI. It is intended 
 ```text
 WhisperX-UI/
 ├── backend/whisperx_ui_backend/  # FastAPI app, services, scheduler, workers, database, and static file serving
-├── frontend/               # React UI source, Vite config, and tests
+├── frontend/               # Vite React UI source, shadcn/ui config, and tests
 ├── docs/                   # Design docs, product specs, security and reliability details, generated schema
 ├── scripts/                # Development, smoke, schema, and release helper scripts
 ├── tests/                  # Backend, queue, retention, static file, and docs tests
@@ -18,7 +18,7 @@ WhisperX-UI/
 
 ```text
 User Browser
-  <-> React Frontend
+  <-> Vite React Frontend
       <-> FastAPI API Process
           -> Application Services
           -> SQLite database
@@ -33,13 +33,13 @@ External network use is limited to explicit model/token-dependent flows such as
 Hugging Face model downloads and pyannote access.
 ```
 
-In development, Vite serves the React UI and the browser calls the local FastAPI backend. In release mode, the bundled backend serves both `/api/*` routes and the built React frontend from one local process.
+In development, Vite serves the React UI and the browser calls the local FastAPI backend. In release mode, the bundled backend serves both `/api/*` routes and the built Vite frontend from one local process.
 
 ## 3. Core Components
 
-### React Frontend
+### Vite React Frontend
 
-The frontend owns browser interaction: upload, library navigation, settings, processing controls, audio playback, transcript review, speaker renaming, and VTT export initiation. It communicates through backend HTTP APIs and does not read SQLite or local filesystem paths directly.
+The frontend owns browser interaction: upload, rail/tree navigation, settings, processing controls, audio playback, transcript review, speaker renaming, and VTT export initiation. It uses official shadcn/ui source components with a rail, secondary sidebar tree, and main-pane hierarchy. It communicates through backend HTTP APIs and does not read SQLite or local filesystem paths directly.
 
 Detailed frontend behavior and test coverage live in [docs/FRONTEND.md](docs/FRONTEND.md).
 
@@ -71,7 +71,7 @@ Product-level processing expectations live in [docs/product-specs/whisperx-web-u
 
 ### Bundled Static Serving
 
-`static_files.py` locates the built React frontend in source or PyInstaller layouts. When frontend assets are present, FastAPI mounts `/assets`, serves `/`, and falls back to `index.html` for non-API frontend routes. Unknown `/api/*` paths remain API errors rather than SPA fallbacks.
+`static_files.py` locates the built Vite frontend in source or PyInstaller layouts. When frontend assets are present, FastAPI mounts `/assets`, serves `/`, and falls back to `index.html` for non-API frontend routes. Unknown `/api/*` paths remain API errors rather than SPA fallbacks.
 
 Release packaging details live in [docs/design-docs/release-packaging.md](docs/design-docs/release-packaging.md).
 

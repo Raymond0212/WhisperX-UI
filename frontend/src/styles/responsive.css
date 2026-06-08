@@ -1,291 +1,159 @@
-@media (max-width: 1180px) {
-  .layout--active {
-    grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
+@media (max-width: 900px) {
+  body {
+    overflow: hidden;
   }
 
-  .settings-modal form {
-    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  .app-shell {
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
   }
-}
 
-@media (max-width: 860px) {
-  .topbar {
-    align-items: center;
-    border-radius: 0 0 18px 18px;
-    min-height: 4rem;
-    padding: 0.65rem 0.8rem;
+  .vault-shell {
+    grid-template-columns: 4.25rem minmax(0, 1fr);
+    grid-template-rows: 100dvh;
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
     position: relative;
   }
 
-  .brand-lockup {
-    align-items: center;
-    gap: 0 0.6rem;
-    grid-template-columns: auto minmax(0, 1fr);
-    padding-left: 3.55rem;
-    padding-right: 3.55rem;
+  .section-rail {
+    grid-row: 1 / -1;
   }
 
-  .brand-mark {
-    border-radius: 16px;
-    grid-column: 1;
-    grid-row: 1;
-    height: 3rem;
-    width: 3rem;
-  }
-
-  .topbar h1 {
-    align-self: center;
-    font-size: clamp(1.5rem, 7.2vw, 2rem);
+  .secondary-sidebar {
+    background: var(--background);
+    border-bottom: 0;
+    border-right: 0;
     grid-column: 2;
     grid-row: 1;
-    line-height: 0.9;
-  }
-
-  .topbar p {
-    display: none;
-  }
-
-  .topbar-actions {
-    position: static;
-  }
-
-  .icon-button {
-    min-height: 2.25rem;
-    width: 2.25rem;
-  }
-
-  .library-toggle {
-    display: inline-flex;
-    left: 0.55rem;
-    position: absolute;
-    top: 0.55rem;
-    z-index: 2;
-  }
-
-  .settings-trigger {
-    position: absolute;
-    right: 0.55rem;
-    top: 0.55rem;
-    z-index: 2;
-  }
-
-  .layout,
-  .layout--active,
-  .layout--library {
-    grid-template-columns: 1fr;
-  }
-
-  .layout--active .sidebar {
-    bottom: 0;
-    left: 0;
-    max-width: min(86vw, 24rem);
-    position: fixed;
-    top: 0;
-    transform: translateX(-108%);
-    transition: transform 260ms ease;
-    z-index: 30;
-  }
-
-  .app-shell.mobile-library-open .layout--active .sidebar {
-    transform: translateX(0);
-  }
-
-  .mobile-library-backdrop {
-    background: rgba(18, 29, 31, 0.34);
-    border: 0;
-    bottom: 0;
-    display: block;
-    left: 0;
-    margin: 0;
-    min-height: 0;
-    padding: 0;
-    position: fixed;
-    right: 0;
-    top: 0;
-    width: auto;
-    z-index: 20;
-  }
-
-  .app-shell.mobile-library-open .workspace {
-    pointer-events: none;
-  }
-
-  .workspace {
-    opacity: 1;
+    display: flex;
+    height: 100dvh;
     overflow: hidden;
-    pointer-events: auto;
-    transform: none;
+    width: 100%;
   }
 
-  .audio-header,
-  .review-header {
+  .main-pane {
+    background: var(--background);
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    height: 100dvh;
+    overflow: hidden;
+    pointer-events: none;
+    transform: translateX(calc(100% + 1rem));
+    transition: transform 240ms ease;
+    width: 100%;
+    will-change: transform;
+    z-index: 1;
+  }
+
+  .main-pane.is-gesture-dragging {
+    transition: none;
+  }
+
+  .app-shell.mobile-library-open .main-pane {
+    pointer-events: auto;
+    transform: translateX(var(--mobile-pane-offset, 0px));
+  }
+
+  .speaker-row,
+  .sentence-row,
+  .turn,
+  .recording-settings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .audio-header {
     align-items: center;
-    flex-direction: row;
+    gap: 0.5rem;
+    height: auto;
+    min-height: 4.5rem;
+    padding: 0.75rem 0.85rem;
   }
 
   .toolbar {
-    width: auto;
+    align-items: center;
+    gap: 0.35rem;
+    justify-content: flex-end;
+    min-width: max-content;
   }
 
   .toolbar button {
-    min-height: 2.25rem;
-    width: 2.25rem;
-    padding: 0;
+    min-width: 2.25rem;
   }
 
   .toolbar-label {
     display: none;
   }
 
-  .review-header .segmented {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .review-header .segmented button {
-    flex: 1;
-    min-height: 2.25rem;
-    padding-inline: 0.7rem;
-  }
-
-  .review-header .export-link {
-    aspect-ratio: 1;
-    min-height: 2.25rem;
-    padding: 0;
-    width: 2.25rem;
-  }
-
-  .sentence-row {
-    grid-template-columns: 2rem minmax(0, 1fr);
-  }
-
-  .sentence-meta,
-  .sentence-row .turn-sentence {
-    grid-column: 2;
-  }
-
-  .turn {
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-rows: auto auto;
-  }
-
-  .turn > .round-play-button {
-    align-self: start;
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .turn-meta,
-  .turn-textbox {
-    grid-column: 2;
-  }
-
-  .turn-meta {
-    grid-row: 1;
-  }
-
-  .turn-textbox {
-    grid-row: 2;
-  }
-
-  .settings-modal,
-  .upload-modal {
-    justify-self: center;
-  }
-
-  .settings-modal form {
-    grid-template-columns: 1fr;
-  }
-
-  .recording-settings {
-    grid-template-columns: 1fr;
-  }
-
-  .speaker-list .recording-settings label {
-    grid-template-columns: minmax(0, 1fr) 5.25rem;
-    margin: 0;
-  }
-}
-
-@media (max-width: 560px) {
-  .brand-mark {
-    height: 2.65rem;
-    width: 2.65rem;
-  }
-
-  .topbar h1 {
-    font-size: clamp(1.35rem, 7vw, 1.75rem);
-  }
-
-  .library-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .library-title-button {
-    grid-column: 1;
-    min-width: 0;
-  }
-
-  .library-status-icon {
-    grid-column: 2;
-    justify-self: end;
-  }
-
-  .speaker-row {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .speaker-row input {
-    grid-column: 1 / -1;
-  }
-
-  .speaker-row code {
-    overflow-wrap: anywhere;
-  }
-}
-
-@media (max-height: 520px) and (max-width: 950px) {
-  .topbar {
-    border-radius: 0 0 14px 14px;
-    min-height: 3.4rem;
-    padding: 0.45rem 0.75rem;
-  }
-
-  .brand-lockup {
-    gap: 0 0.55rem;
-  }
-
-  .brand-mark {
-    border-radius: 12px;
-    height: 2.05rem;
-    width: 2.05rem;
-  }
-
-  .topbar h1 {
-    font-size: clamp(1.35rem, 4vw, 1.95rem);
-    line-height: 0.95;
-  }
-
-  .topbar p {
-    display: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation: none !important;
-    scroll-behavior: auto !important;
-    transition: none !important;
-  }
-
-  button:hover,
-  .export-link:hover,
-  .drop-zone.dragging,
-  .sentence-row:focus-within,
   .workspace,
-  .layout--library .sidebar {
-    transform: none !important;
+  .workspace-shell,
+  .workspace-content {
+    background: var(--background);
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .workspace-content {
+    padding: 0.7rem;
+  }
+
+  .run-summary-grid {
+    gap: 0.45rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-block: -0.1rem;
+  }
+
+  .summary-card[data-slot="card"] {
+    padding-block: 0.3rem;
+  }
+
+  .summary-card [data-slot="card-content"] {
+    gap: 0.02rem;
+    min-height: 1.2rem;
+    padding: 0.28rem 0.42rem;
+  }
+
+  .summary-card span {
+    font-size: 0.66rem;
+  }
+
+  .summary-card strong {
+    font-size: 0.78rem;
+    line-height: 1.2;
+  }
+
+  .title-field {
+    gap: 0.15rem;
+    min-width: 0;
+  }
+
+  .workspace-breadcrumb {
+    font-size: 0.74rem;
+  }
+
+  .title-display,
+  .title-edit-input {
+    font-size: 0.98rem;
+    max-width: 100%;
+  }
+
+  .custom-audio-player {
+    column-gap: 0.5rem;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    min-height: 0;
+    padding: 0.7rem 0.8rem;
+    row-gap: 0;
+  }
+
+  .audio-time {
+    font-size: 0.74rem;
+    white-space: nowrap;
+  }
+
+  .audio-control--volume {
+    align-self: center;
   }
 }

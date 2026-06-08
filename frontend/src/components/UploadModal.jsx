@@ -1,5 +1,6 @@
 import React from "react";
 import { Upload, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export function UploadModal({ isUploading, onClose, onUpload, progressPercent, selectedFile }) {
   if (!selectedFile) return null;
@@ -21,9 +22,9 @@ export function UploadModal({ isUploading, onClose, onUpload, progressPercent, s
             <div className="panel-kicker">New audio</div>
             <h2 id="upload-title">Review upload</h2>
           </div>
-          <button type="button" className="icon-button" aria-label="Close import dialog" onClick={onClose}>
+          <Button type="button" variant="ghost" size="icon-sm" aria-label="Close import dialog" onClick={onClose}>
             <X size={18} />
-          </button>
+          </Button>
         </header>
         <p className="selected-file-name">{selectedFile.name}</p>
         <form onSubmit={onUpload}>
@@ -52,9 +53,9 @@ export function UploadModal({ isUploading, onClose, onUpload, progressPercent, s
               <p className="upload-progress__label">Uploading {Math.round(clampedProgress)}%</p>
             </div>
           )}
-          <button type="submit" disabled={isUploading}>
+          <Button type="submit" size="sm" disabled={isUploading}>
             <Upload size={16} /> {isUploading ? "Uploading..." : "Upload"}
-          </button>
+          </Button>
         </form>
       </section>
     </div>

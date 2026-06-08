@@ -4,7 +4,7 @@ Status: Active
 
 ## Purpose
 
-WhisperX UI release packaging creates self-contained executable bundles for the local-first web application. The bundle runs the FastAPI backend and serves the built React frontend from the same local process.
+WhisperX UI release packaging creates self-contained executable bundles for the local-first web application. The bundle runs the FastAPI backend and serves the built Vite React frontend from the same local process.
 
 ## Local Builds
 
@@ -15,7 +15,7 @@ The script:
 - syncs Python build and test dependencies from `uv.lock`;
 - installs frontend dependencies with `npm ci`;
 - runs backend and frontend tests;
-- builds the React frontend;
+- builds the Vite React frontend;
 - copies the frontend build into the backend package;
 - runs PyInstaller against `backend/whisperx_ui_backend/__main__.py`;
 - starts the packaged executable and checks `/api/health`, `/`, and one built frontend asset.
@@ -31,6 +31,6 @@ Windows packaging is currently CI-only. Do not document a local Windows release 
 ## Constraints
 
 - Keep release behavior local-first: bundled executables must not introduce hosted services or remote persistence.
-- Keep the backend as the release entry point so `/api/*` routes and the React frontend are served by one local process.
+- Keep the backend as the release entry point so `/api/*` routes and the Vite React frontend are served by one local process.
 - Keep CI release builds gated by backend tests, frontend tests, and packaged executable smoke validation before artifact upload.
 - Update this document when release platforms, artifact names, or local packaging scripts change.

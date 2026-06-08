@@ -1,6 +1,7 @@
 import React from "react";
 import { Save, X } from "lucide-react";
 import { mergeJobSettings } from "../jobUtils.js";
+import { Button } from "@/components/ui/button";
 
 const COMPUTE_TYPES = [
   "default",
@@ -147,9 +148,9 @@ export function SettingsModal({ jobSettings, modelOptions, onChangeJobSetting, o
             <div className="panel-kicker">Defaults</div>
             <h2 id="settings-title">Settings</h2>
           </div>
-          <button type="button" className="icon-button" aria-label="Close settings" onClick={onClose}>
+          <Button type="button" variant="ghost" size="icon-sm" aria-label="Close settings" onClick={onClose}>
             <X size={18} />
-          </button>
+          </Button>
         </header>
         <form id="settings-form" onSubmit={onSaveSettings} key={JSON.stringify(settings)}>
           <label>
@@ -177,9 +178,9 @@ export function SettingsModal({ jobSettings, modelOptions, onChangeJobSetting, o
           <SettingsFields settings={mergeJobSettings(settings)} modelOptions={modelOptions} />
         </form>
         <footer className="settings-modal-footer">
-          <button type="submit" form="settings-form">
+          <Button type="submit" form="settings-form" size="sm">
             <Save size={16} /> Save
-          </button>
+          </Button>
         </footer>
       </section>
     </div>
