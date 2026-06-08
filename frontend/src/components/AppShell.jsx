@@ -1,6 +1,7 @@
 import React from "react";
 import { AudioLines, BriefcaseBusiness, Library, Moon, Settings, Sun, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { API_BASE } from "../api.js";
 
 const SECTIONS = [
   { id: "library", label: "Library", icon: Library },
@@ -23,6 +24,7 @@ export function AppShell({
 }) {
   const [swipeOffset, setSwipeOffset] = React.useState(0);
   const swipeStateRef = React.useRef(null);
+  const backendOrigin = API_BASE || window.location.origin;
 
   React.useEffect(() => {
     if (!isMobileLibraryOpen) {
@@ -104,7 +106,7 @@ export function AppShell({
       >
         {!isBackendAvailable && (
           <div className="backend-warning" role="alert">
-            Backend service is unavailable. Start backend at <code>http://127.0.0.1:8000</code>.
+            Backend service is unavailable. Start backend at <code>{backendOrigin}</code>.
           </div>
         )}
         {children}
